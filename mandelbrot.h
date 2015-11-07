@@ -18,6 +18,7 @@ class Mandelbrot {
     private:
         double interpolate(double min, double max, int range);
         int escape(double x, double y, int MAX);
+        void genLine();
 
         sf::Color findColor(int iter);
         sf::Image image;

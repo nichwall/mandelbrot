@@ -5,6 +5,8 @@
 int nextLine = 0;
 int palette[3][256];
 void initPalette();
+sf::Mutex mutex1;
+sf::Mutex mutex2;
 
 //constructors:
 Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
@@ -29,7 +31,7 @@ void Mandelbrot::setIterations(int iterations) {MAX_ITER = iterations;}
 void Mandelbrot::setColorMultiple(int multiple) {color_multiple = multiple;}
 
 int getNextLine() {
-    return ++nextLine;
+    return nextLine++;
 }
 
 //functions:
@@ -98,6 +100,7 @@ sf::Color Mandelbrot::findColor(int iter) {
     return color;
 }
 
+/*
 void Mandelbrot::generate() {
     int iter, row, column;
     double x, y;
@@ -119,8 +122,59 @@ void Mandelbrot::generate() {
     }
     texture.update(image);
     sprite.setTexture(texture);
+}*/
+
+void Mandelbrot::generate() {
+    nextLine = 0;
+
+    sf::Thread thread1(&Mandelbrot::genLine, this);
+    sf::Thread thread2(&Mandelbrot::genLine, this);
+    sf::Thread thread3(&Mandelbrot::genLine, this);
+    sf::Thread thread4(&Mandelbrot::genLine, this);
+
+    thread1.launch();
+    thread2.launch();
+    thread3.launch();
+    thread4.launch();
+
+    thread1.wait();
+    thread2.wait();
+    thread3.wait();
+    thread4.wait();
+
+    texture.update(image);
+    sprite.setTexture(texture);
 }
 
+void Mandelbrot::genLine() {
+    int iter, row, column;
+    double x, y;
+    double x_inc = interpolate(x_min, x_max, RESOLUTION);
+    double y_inc = interpolate(y_min, y_max, RESOLUTION);
+    sf::Color color;
+
+    while(true) {
+
+        //mutex this!
+        mutex1.lock();
+        row = getNextLine();
+        mutex1.unlock();
+        if (row >= RESOLUTION) return;
+
+        y = y_max - row * y_inc;
+
+        for (column = 0; column < RESOLUTION; column++) {
+            x = x_min + column * x_inc;
+
+            iter = escape(x, y, MAX_ITER);
+
+            //mutex this!
+            mutex2.lock();
+            image.setPixel(column, row, findColor(iter));
+            mutex2.unlock();
+        }
+    }
+}
 
 void Mandelbrot::draw() {
     window->draw(sprite);
