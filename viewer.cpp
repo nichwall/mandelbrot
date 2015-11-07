@@ -48,6 +48,9 @@ int main() {
                     case sf::Keyboard::R:
                         brot.reset();
                         break;
+                    case sf::Keyboard::S:
+                        brot.saveImage();
+                        break;
                     default:
                         break;
                 }

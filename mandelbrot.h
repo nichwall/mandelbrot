@@ -13,6 +13,7 @@ class Mandelbrot {
         void setColorMultiple(int multiple);
         void zoomIn(int x, int y);
         void zoomOut(int x, int y);
+        void saveImage();
         int getResolution();
 
     private:

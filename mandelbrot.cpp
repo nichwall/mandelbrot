@@ -1,5 +1,7 @@
 #include "mandelbrot.h"
 #include <math.h>
+#include <string.h>
+#include <ctime>
 #include <iostream>
 
 int nextLine = 0;
@@ -215,4 +217,16 @@ void Mandelbrot::reset() {
     y_max = 1.0;
     MAX_ITER = 50;
     color_multiple = 1;
+}
+
+void Mandelbrot::saveImage() {
+    time_t currentTime = time(0);
+    tm* currentDate = localtime(&currentTime);
+    char filename[80]  {0};
+
+    strftime(filename,80,"%Y-%m-%d.%H-%M-%S",currentDate);
+    strcat(filename, ".png");
+
+    image.saveToFile(filename);
+    std::cout << "Saved image to " << filename << std::endl;
 }
