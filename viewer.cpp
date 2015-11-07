@@ -5,6 +5,7 @@
 int main() {
     int resolution = 768;
     int iterations = 50;
+    int color_multiple = 1;
     sf::RenderWindow * windowPointer;
     sf::RenderWindow window(sf::VideoMode(resolution, resolution), "Mandelbrot Viewer");
     window.setFramerateLimit(10);
@@ -35,6 +36,14 @@ int main() {
                     case sf::Keyboard::Down:
                         if (iterations > 50) iterations -= 20;
                         brot.setIterations(iterations);
+                        break;
+                    case sf::Keyboard::Right:
+                        color_multiple += 2;
+                        brot.setColorMultiple(color_multiple);
+                        break;
+                    case sf::Keyboard::Left:
+                        if (color_multiple > 2) color_multiple -= 2;
+                        brot.setColorMultiple(color_multiple);
                         break;
                     case sf::Keyboard::R:
                         brot.reset();

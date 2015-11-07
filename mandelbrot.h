@@ -10,13 +10,13 @@ class Mandelbrot {
         void generate();
         void reset();
         void setIterations(int iterations);
+        void setColorMultiple(int multiple);
         void zoomIn(int x, int y);
         void zoomOut(int x, int y);
         int getResolution();
 
     private:
         double interpolate(double min, double max, int range);
-        double magnitude(double x, double y);
         int escape(double x, double y, int MAX);
 
         sf::Color findColor(int iter);
@@ -31,6 +31,7 @@ class Mandelbrot {
         double y_max;
         int RESOLUTION;
         int MAX_ITER;
+        int color_multiple;
 };
 
 #endif

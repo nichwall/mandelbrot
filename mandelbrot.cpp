@@ -17,6 +17,7 @@ Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
     texture.create(RESOLUTION, RESOLUTION);
     image.create(RESOLUTION, RESOLUTION, sf::Color::Black);
     initPalette();
+    color_multiple = 1;
 }
 
 //accessors:
@@ -24,8 +25,9 @@ int Mandelbrot::getResolution() {return RESOLUTION;}
 
 void Mandelbrot::setIterations(int iterations) {MAX_ITER = iterations;}
 
-//functions:
+void Mandelbrot::setColorMultiple(int multiple) {color_multiple = multiple;}
 
+//functions:
 int coerce(int number) {
     if (number > 255) number = 255;
     else if (number < 0) number = 0;
@@ -50,28 +52,37 @@ double Mandelbrot::interpolate(double min, double max, int range) {
     return (max - min) / range;
 }
 
-double Mandelbrot::magnitude(double x, double y) {
-    return sqrt(x * x + y * y);
-}
-
 int Mandelbrot::escape(double x0, double y0, int MAX) {
-    double x = 0, y = 0;
-    double x_temp;
-    int iter;
+    double x = 0, y = 0, x_check = 0, y_check = 0;
+    int iter = 0, period = 2;
 
-    double p = sqrt(pow((x0 - 0.25),2) + pow(y0,2));
-    if(x0 < p - 2 * p * p + 0.25 || pow((x0 + 1),2) + y0 * y0 < 0.0625) return MAX;
+    double x_square = 0;
+    double y_square = 0;
 
-    for (iter = 0; iter < MAX && magnitude(x,y) < 2; iter++) {
-        x_temp = x*x - y*y + x0;
-        y = 2*x*y + y0;
-        x = x_temp;
+    while(period < MAX_ITER) {
+        x_check = x;
+        y_check = y;
+        period += period;
+        if (period > MAX_ITER) period = MAX_ITER;
+        for (; iter < period; iter++) {
+            y = x * y;
+            y += y; //multiply by two
+            y += y0;
+            x = x_square - y_square + x0;
+            x_square = x*x;
+            y_square = y*y;
+
+            if (x_square + y_square > 4.0) return iter;
+            if ((x == x_check) && (y == y_check)){
+                return MAX_ITER;
+            }
+        }
     }
-    return iter;
+    return MAX_ITER;
 }
 
 sf::Color Mandelbrot::findColor(int iter) {
-    int i = iter % 255;
+    int i = (iter * color_multiple) % 255;
     sf::Color color;
     if (iter >= MAX_ITER) color = sf::Color::Black;
     else {
@@ -144,4 +155,5 @@ void Mandelbrot::reset() {
     y_min = -1.0;
     y_max = 1.0;
     MAX_ITER = 50;
+    color_multiple = 1;
 }
