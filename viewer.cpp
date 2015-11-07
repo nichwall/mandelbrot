@@ -6,6 +6,8 @@ int main() {
     int resolution = 768;
     int iterations = 50;
     int color_multiple = 1;
+    sf::Vector2i old_position;
+    sf::Vector2i new_position;
     sf::RenderWindow * windowPointer;
     sf::RenderWindow window(sf::VideoMode(resolution, resolution), "Mandelbrot Viewer");
     window.setFramerateLimit(10);
@@ -62,6 +64,13 @@ int main() {
                 else if (event.mouseWheelScroll.delta < 0)
                     brot.zoomOut(event.mouseWheelScroll.x, event.mouseWheelScroll.y);
                 brot.generate();
+                break;
+            case sf::Event::MouseButtonPressed:
+                old_position = sf::Mouse::getPosition(window);
+                while (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+                }
+                new_position = sf::Mouse::getPosition(window);
+                brot.drag(old_position, new_position);
                 break;
             default:
                 break;

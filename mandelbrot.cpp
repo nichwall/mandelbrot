@@ -102,30 +102,6 @@ sf::Color Mandelbrot::findColor(int iter) {
     return color;
 }
 
-/*
-void Mandelbrot::generate() {
-    int iter, row, column;
-    double x, y;
-    double x_inc = interpolate(x_min, x_max, RESOLUTION);
-    double y_inc = interpolate(y_min, y_max, RESOLUTION);
-    sf::Color color;
-
-    for (row = 0; row < RESOLUTION; row++) {
-        y = y_max - row * y_inc;
-
-        for (column = 0; column < RESOLUTION; column++) {
-            x = x_min + column * x_inc;
-
-            iter = escape(x, y, MAX_ITER);
-
-
-            image.setPixel(column, row, findColor(iter));
-        }
-    }
-    texture.update(image);
-    sprite.setTexture(texture);
-}*/
-
 void Mandelbrot::generate() {
     nextLine = 0;
 
@@ -222,11 +198,26 @@ void Mandelbrot::reset() {
 void Mandelbrot::saveImage() {
     time_t currentTime = time(0);
     tm* currentDate = localtime(&currentTime);
-    char filename[80]  {0};
-
+    char filename[80];
     strftime(filename,80,"%Y-%m-%d.%H-%M-%S",currentDate);
     strcat(filename, ".png");
 
     image.saveToFile(filename);
     std::cout << "Saved image to " << filename << std::endl;
+}
+
+void Mandelbrot::drag(sf::Vector2i old_position, sf::Vector2i new_position) {
+    sf::Vector2i dif = new_position - old_position;
+    sf::Vector2<double> old_center((x_min + x_max)/2.0, (y_min + y_max)/2.0);
+    sf::Vector2<double> new_center((old_center.x - interpolate(0, dif.x, RESOLUTION)),
+            old_center.y + interpolate(0, dif.y, RESOLUTION));
+    double x_length = (x_max - x_min)/2.0;
+    double y_length = (y_max - y_min)/2.0;
+    x_max = new_center.x + x_length;
+    x_min = new_center.x - x_length;
+    y_max = new_center.y + y_length;
+    y_min = new_center.y - y_length;
+
+    generate();
+    draw();
 }
