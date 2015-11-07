@@ -2,6 +2,7 @@
 #include <math.h>
 #include <iostream>
 
+int nextLine = 0;
 int palette[3][256];
 void initPalette();
 
@@ -26,6 +27,10 @@ int Mandelbrot::getResolution() {return RESOLUTION;}
 void Mandelbrot::setIterations(int iterations) {MAX_ITER = iterations;}
 
 void Mandelbrot::setColorMultiple(int multiple) {color_multiple = multiple;}
+
+int getNextLine() {
+    return ++nextLine;
+}
 
 //functions:
 int coerce(int number) {
