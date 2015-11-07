@@ -1,3 +1,6 @@
+#ifndef MANDELBROT_H
+#define MANDELBROT_H
+
 #include <SFML/Graphics.hpp>
 
 class Mandelbrot {
@@ -9,14 +12,14 @@ class Mandelbrot {
         void setIterations(int iterations);
         void zoomIn(int x, int y);
         void zoomOut(int x, int y);
-
+        void initPalette();
         int getResolution();
 
     private:
         double interpolate(double min, double max, int range);
         double magnitude(double x, double y);
         int escape(double x, double y, int MAX);
-        int palette[2][255];
+        extern int palette[2][255];
 
         sf::Color findColor(int iter);
         sf::Image image;
@@ -31,3 +34,5 @@ class Mandelbrot {
         int RESOLUTION;
         int MAX_ITER;
 };
+
+#endif

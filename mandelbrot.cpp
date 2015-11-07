@@ -2,28 +2,19 @@
 #include <math.h>
 #include <iostream>
 
+int Mandelbrot::palette = new int[2][255];
+
 //constructors:
 Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
     x_min = -1.5;
     x_max = 0.5;
     y_min = -1.0;
     y_max = 1.0;
-    RESOLUTION = resolution;
     MAX_ITER = 50;
+    RESOLUTION = resolution;
     window = windowPointer;
     texture.create(RESOLUTION, RESOLUTION);
     image.create(RESOLUTION, RESOLUTION, sf::Color::Black);
-
-    for (int i = 0; i <= 255; i++) {
-        palette[0][i] = (int) (23.45 - 1.880*i + 0.0461*pow(i,2) - 0.000152*pow(i,3));
-        palette[1][i] = (int) (17.30 - 0.417*i + 0.0273*pow(i,2) - 0.000101*pow(i,3));
-        palette[2][i] = (int) (25.22 + 7.902*i - 0.0681*pow(i,2) + 0.000145*pow(i,3));
-
-        for (int j = 0; j <= 2; j++) {
-            if (palette[j][i] > 255) palette[j][i] = 255;
-            else if (palette[j][i] < 0) palette[j][i] = 0;
-        }
-    }
 }
 
 //accessors:
@@ -32,6 +23,31 @@ int Mandelbrot::getResolution() {return RESOLUTION;}
 void Mandelbrot::setIterations(int iterations) {MAX_ITER = iterations;}
 
 //functions:
+
+int coerce(int number) {
+    if (number > 255) number = 255;
+    else if (number < 0) number = 0;
+    return number;
+}
+
+void Mandelbrot::initPalette() {
+    int r, g, b;
+    std::cout << "MAX_ITER before loop: " << MAX_ITER << "\n";
+    std::cout << x_min << " " << y_max << " " << RESOLUTION << "\n";
+    for (int i = 0; i <= 255; i++) {
+        r = (int) (23.45 - 1.880*i + 0.0461*pow(i,2) - 0.000152*pow(i,3));
+        g = (int) (17.30 - 0.417*i + 0.0273*pow(i,2) - 0.000101*pow(i,3));
+        b = (int) (25.22 + 7.902*i - 0.0681*pow(i,2) + 0.000145*pow(i,3));
+
+        palette[0][i] = coerce(r);
+        palette[1][i] = coerce(g);
+        palette[2][i] = coerce(b);
+    }
+    std::cout << "MAX_ITER after loop: " << MAX_ITER << "\n";
+    std::cout << x_min << " " << y_max << " " << RESOLUTION << "\n";
+
+}
+
 double Mandelbrot::interpolate(double min, double max, int range) {
     return (max - min) / range;
 }
@@ -45,7 +61,6 @@ int Mandelbrot::escape(double x0, double y0, int MAX) {
     double x_temp;
     int iter;
 
-    std::cout << "max iterations: " << MAX;
 //    double p = sqrt(pow((x0 - 0.25),2) + pow(y0,2));
 //    if(x0 < p - 2 * p * p + 0.25 || pow((x0 + 1),2) + y0 * y0 < 0.0625) return MAX;
 
@@ -54,7 +69,6 @@ int Mandelbrot::escape(double x0, double y0, int MAX) {
         y = 2*x*y + y0;
         x = x_temp;
     }
-    std::cout << iter << " found iter\n";
     return iter;
 }
 
@@ -64,7 +78,6 @@ sf::Color Mandelbrot::findColor(int iter) {
     sf::Color color;
     if (iter >= MAX_ITER) color = sf::Color::Black;
     else if (iter < MAX_ITER) color = sf::Color::White;
-    std::cout << "color " << color.r << " " << color.g << " " << color.b << "\n";
     return color;
 }
 
@@ -73,7 +86,7 @@ void Mandelbrot::generate() {
     double x, y;
     double x_inc = interpolate(x_min, x_max, RESOLUTION);
     double y_inc = interpolate(y_min, y_max, RESOLUTION);
-    std::cout << "starting image gen" << std::endl;
+    sf::Color color;
 
     for (row = 0; row < RESOLUTION; row++) {
         y = y_max - row * y_inc;
@@ -81,13 +94,14 @@ void Mandelbrot::generate() {
         for (column = 0; column < RESOLUTION; column++) {
             x = x_min + column * x_inc;
 
-            std::cout << "MAX_ITER: " << MAX_ITER << std::endl;
             iter = escape(x, y, MAX_ITER);
 
-            std::cout << "setting pixel..." << std::endl;
             std::cout << "col: " << column << " row: " << row << " iter: " << iter << std::endl;
 
-            image.setPixel(column, row, findColor(iter));
+            color = findColor(iter);
+            std::cout << "color " << color.r << " " << color.g << " " << color.b << "\n";
+
+            image.setPixel(column, row, sf::Color::White);
             std::cout << "wrote pixel" << std::endl;
         }
     }
