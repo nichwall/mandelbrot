@@ -16,7 +16,7 @@ Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
     x_max = 0.5;
     y_min = -1.0;
     y_max = 1.0;
-    MAX_ITER = 50;
+    MAX_ITER = 100;
     RESOLUTION = resolution;
     window = windowPointer;
     texture.create(RESOLUTION, RESOLUTION);
