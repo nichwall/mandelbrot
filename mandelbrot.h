@@ -12,14 +12,12 @@ class Mandelbrot {
         void setIterations(int iterations);
         void zoomIn(int x, int y);
         void zoomOut(int x, int y);
-        void initPalette();
         int getResolution();
 
     private:
         double interpolate(double min, double max, int range);
         double magnitude(double x, double y);
         int escape(double x, double y, int MAX);
-        extern int palette[2][255];
 
         sf::Color findColor(int iter);
         sf::Image image;

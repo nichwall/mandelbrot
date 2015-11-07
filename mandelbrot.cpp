@@ -2,7 +2,8 @@
 #include <math.h>
 #include <iostream>
 
-int Mandelbrot::palette = new int[2][255];
+int palette[3][256];
+void initPalette();
 
 //constructors:
 Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
@@ -15,6 +16,7 @@ Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
     window = windowPointer;
     texture.create(RESOLUTION, RESOLUTION);
     image.create(RESOLUTION, RESOLUTION, sf::Color::Black);
+    initPalette();
 }
 
 //accessors:
@@ -30,10 +32,8 @@ int coerce(int number) {
     return number;
 }
 
-void Mandelbrot::initPalette() {
+void initPalette() {
     int r, g, b;
-    std::cout << "MAX_ITER before loop: " << MAX_ITER << "\n";
-    std::cout << x_min << " " << y_max << " " << RESOLUTION << "\n";
     for (int i = 0; i <= 255; i++) {
         r = (int) (23.45 - 1.880*i + 0.0461*pow(i,2) - 0.000152*pow(i,3));
         g = (int) (17.30 - 0.417*i + 0.0273*pow(i,2) - 0.000101*pow(i,3));
@@ -43,8 +43,6 @@ void Mandelbrot::initPalette() {
         palette[1][i] = coerce(g);
         palette[2][i] = coerce(b);
     }
-    std::cout << "MAX_ITER after loop: " << MAX_ITER << "\n";
-    std::cout << x_min << " " << y_max << " " << RESOLUTION << "\n";
 
 }
 
@@ -61,8 +59,8 @@ int Mandelbrot::escape(double x0, double y0, int MAX) {
     double x_temp;
     int iter;
 
-//    double p = sqrt(pow((x0 - 0.25),2) + pow(y0,2));
-//    if(x0 < p - 2 * p * p + 0.25 || pow((x0 + 1),2) + y0 * y0 < 0.0625) return MAX;
+    double p = sqrt(pow((x0 - 0.25),2) + pow(y0,2));
+    if(x0 < p - 2 * p * p + 0.25 || pow((x0 + 1),2) + y0 * y0 < 0.0625) return MAX;
 
     for (iter = 0; iter < MAX && magnitude(x,y) < 2; iter++) {
         x_temp = x*x - y*y + x0;
@@ -74,10 +72,13 @@ int Mandelbrot::escape(double x0, double y0, int MAX) {
 
 sf::Color Mandelbrot::findColor(int iter) {
     int i = iter % 255;
-//  sf::Color color(palette[0][i], palette[1][i], palette[2][i]);
     sf::Color color;
     if (iter >= MAX_ITER) color = sf::Color::Black;
-    else if (iter < MAX_ITER) color = sf::Color::White;
+    else {
+        color.r = palette[0][i];
+        color.g = palette[1][i];
+        color.b = palette[2][i];
+    }
     return color;
 }
 
@@ -96,20 +97,12 @@ void Mandelbrot::generate() {
 
             iter = escape(x, y, MAX_ITER);
 
-            std::cout << "col: " << column << " row: " << row << " iter: " << iter << std::endl;
 
-            color = findColor(iter);
-            std::cout << "color " << color.r << " " << color.g << " " << color.b << "\n";
-
-            image.setPixel(column, row, sf::Color::White);
-            std::cout << "wrote pixel" << std::endl;
+            image.setPixel(column, row, findColor(iter));
         }
     }
-    std::cout << "finished image gen, setting..." << std::endl;
-
     texture.update(image);
     sprite.setTexture(texture);
-    std::cout << "updated texture" << std::endl;
 }
 
 

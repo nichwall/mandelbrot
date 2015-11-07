@@ -12,8 +12,6 @@ int main() {
     windowPointer = &window;
     Mandelbrot brot(windowPointer, resolution);
 
-    brot.initPalette();
-
     brot.generate();
 
     //main window loop
