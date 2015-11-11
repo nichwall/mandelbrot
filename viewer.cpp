@@ -49,6 +49,7 @@ int main() {
                         break;
                     case sf::Keyboard::R:
                         brot.reset();
+                        color_multiple = 0;
                         break;
                     case sf::Keyboard::S:
                         brot.saveImage();
