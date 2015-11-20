@@ -5,7 +5,6 @@
 int main() {
     int resolution = 768;
     int iterations = 100;
-    int color_multiple = 1;
     sf::Vector2i old_position;
     sf::Vector2i new_position;
     sf::RenderWindow * windowPointer;
@@ -40,16 +39,14 @@ int main() {
                         brot.setIterations(iterations);
                         break;
                     case sf::Keyboard::Right:
-                        color_multiple += 1;
-                        brot.setColorMultiple(color_multiple);
+                        brot.setColorMultiple(brot.getColorMultiple()+1);
                         break;
                     case sf::Keyboard::Left:
-                        if (color_multiple > 1) color_multiple -= 1;
-                        brot.setColorMultiple(color_multiple);
+                        if (brot.getColorMultiple() > 1)
+                            brot.setColorMultiple(brot.getColorMultiple()-1);
                         break;
                     case sf::Keyboard::R:
                         brot.reset();
-                        color_multiple = 0;
                         break;
                     case sf::Keyboard::S:
                         brot.saveImage();

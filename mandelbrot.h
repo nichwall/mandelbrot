@@ -15,6 +15,7 @@ class Mandelbrot {
         void zoomOut(int x, int y);
         void saveImage();
         void drag(sf::Vector2i old_position, sf::Vector2i new_position);
+        int getColorMultiple();
         int getResolution();
 
     private:

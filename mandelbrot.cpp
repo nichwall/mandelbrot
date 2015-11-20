@@ -28,6 +28,8 @@ Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
 //accessors:
 int Mandelbrot::getResolution() {return RESOLUTION;}
 
+int Mandelbrot::getColorMultiple() {return color_multiple;}
+
 void Mandelbrot::setIterations(int iterations) {MAX_ITER = iterations;}
 
 void Mandelbrot::setColorMultiple(int multiple) {color_multiple = multiple;}
