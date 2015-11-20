@@ -209,12 +209,20 @@ void Mandelbrot::saveImage() {
 }
 
 void Mandelbrot::drag(sf::Vector2i old_position, sf::Vector2i new_position) {
-    sf::Vector2i dif = new_position - old_position;
-    sf::Vector2<double> old_center((x_min + x_max)/2.0, (y_min + y_max)/2.0);
-    sf::Vector2<double> new_center((old_center.x - interpolate(0, dif.x, RESOLUTION)),
-            old_center.y + interpolate(0, dif.y, RESOLUTION));
+    //find the size of the imaginary plane, to recreate it:
     double x_length = (x_max - x_min)/2.0;
     double y_length = (y_max - y_min)/2.0;
+    
+    //find the difference to move the window by
+    sf::Vector2i dif = new_position - old_position;
+
+    //find the old center
+    sf::Vector2<double> old_center((x_min + x_max)/2.0, (y_min + y_max)/2.0);
+
+    //calculate the new center
+    sf::Vector2<double> new_center((old_center.x - 2 * dif.x * (x_length/RESOLUTION)),
+            old_center.y + 2 * dif.y * (y_length/RESOLUTION));
+
     x_max = new_center.x + x_length;
     x_min = new_center.x - x_length;
     y_max = new_center.y + y_length;
