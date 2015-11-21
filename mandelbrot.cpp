@@ -11,14 +11,13 @@ sf::Mutex mutex1;
 sf::Mutex mutex2;
 
 //constructors:
-Mandelbrot::Mandelbrot(sf::RenderWindow *windowPointer, int resolution) {
+Mandelbrot::Mandelbrot(int resolution) {
     x_min = -1.5;
     x_max = 0.5;
     y_min = -1.0;
     y_max = 1.0;
     MAX_ITER = 100;
     RESOLUTION = resolution;
-    window = windowPointer;
     texture.create(RESOLUTION, RESOLUTION);
     image.create(RESOLUTION, RESOLUTION, sf::Color::Black);
     initPalette();
@@ -104,7 +103,7 @@ sf::Color Mandelbrot::findColor(int iter) {
     return color;
 }
 
-void Mandelbrot::generate() {
+sf::Sprite Mandelbrot::generate() {
     nextLine = 0;
 
     sf::Thread thread1(&Mandelbrot::genLine, this);
@@ -124,6 +123,8 @@ void Mandelbrot::generate() {
 
     texture.update(image);
     sprite.setTexture(texture);
+
+    return sprite;
 }
 
 void Mandelbrot::genLine() {
@@ -154,10 +155,6 @@ void Mandelbrot::genLine() {
             mutex2.unlock();
         }
     }
-}
-
-void Mandelbrot::draw() {
-    window->draw(sprite);
 }
 
 void Mandelbrot::zoomIn(int x, int y) {
@@ -227,7 +224,4 @@ void Mandelbrot::drag(sf::Vector2i old_position, sf::Vector2i new_position) {
     x_min = new_center.x - x_length;
     y_max = new_center.y + y_length;
     y_min = new_center.y - y_length;
-
-    generate();
-    draw();
 }

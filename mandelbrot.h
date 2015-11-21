@@ -5,9 +5,8 @@
 
 class Mandelbrot {
     public:
-        Mandelbrot(sf::RenderWindow*, int resolution);
-        void draw();
-        void generate();
+        Mandelbrot(int resolution);
+        sf::Sprite generate();
         void reset();
         void setIterations(int iterations);
         void setColorMultiple(int multiple);
@@ -26,7 +25,6 @@ class Mandelbrot {
         sf::Color findColor(int iter);
         sf::Image image;
         sf::Texture texture;
-        sf::RenderWindow *window;
         sf::Sprite sprite;
 
         double x_min;
