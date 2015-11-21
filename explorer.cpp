@@ -9,11 +9,6 @@ int main() {
     sf::Vector2i old_position;
     sf::Vector2i new_position;
 
-    //sf::RenderWindow * windowPointer;
-    //sf::RenderWindow window(sf::VideoMode(resolution, resolution), "Mandelbrot Viewer");
-    //window.setFramerateLimit(10);
-    //windowPointer = &window;
-
     Viewer viewer(resolution);
     Mandelbrot brot(resolution);
 

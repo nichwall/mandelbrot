@@ -21,7 +21,6 @@ void Viewer::close() {
 }
 
 bool Viewer::isOpen() {
-    std::cout << "isOpen function\n";
     return window->isOpen();
 }
 
