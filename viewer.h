@@ -5,14 +5,17 @@
 
 class Viewer {
     public:
-        Viewer(int resolution);
+        Viewer(int res);
         int getResolution() {return resolution;}
+        void setFramerate(int framerate);
+        sf::Vector2f getCenter() {return view->getCenter();}
         sf::Sprite getSprite() {return sprite;}
         void setSprite(sf::Sprite);
-        void draw();
+        void zoom(sf::Vector2f center, double zoom);
+        void refresh();
         void close();
-        void clear();
-        void display();
+        void resetView();
+        void resetZoom(sf::Vector2f);
         bool isOpen();
         bool getEvent(sf::Event&);
         sf::Vector2i getMousePosition();
@@ -21,6 +24,7 @@ class Viewer {
         int resolution;
         int framerateLimit;
         sf::RenderWindow *window;
+        sf::View *view;
         sf::Sprite sprite;
 
 };
