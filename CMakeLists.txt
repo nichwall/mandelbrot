@@ -15,8 +15,9 @@ set (EXTRA_LIBS ${EXTRA_LIBS}
     sfml-graphics
 )
 
-add_executable (MandelViewer
+add_executable (MandelExplorer
         viewer.cpp
         mandelbrot.cpp
+        explorer.cpp
 )
-target_link_libraries (MandelViewer ${EXTRA_LIBS})
+target_link_libraries (MandelExplorer ${EXTRA_LIBS})
