@@ -20,6 +20,7 @@ Mandelbrot::Mandelbrot(int resolution) {
     RESOLUTION = resolution;
     texture.create(RESOLUTION, RESOLUTION);
     image.create(RESOLUTION, RESOLUTION, sf::Color::Black);
+    sprite.setTexture(texture);
     initPalette();
     color_multiple = 1;
 }
@@ -103,7 +104,7 @@ sf::Color Mandelbrot::findColor(int iter) {
     return color;
 }
 
-sf::Sprite Mandelbrot::generate() {
+sf::Sprite Mandelbrot::generate(bool update) {
     nextLine = 0;
 
     sf::Thread thread1(&Mandelbrot::genLine, this);
@@ -121,10 +122,13 @@ sf::Sprite Mandelbrot::generate() {
     thread3.wait();
     thread4.wait();
 
-    texture.update(image);
-    sprite.setTexture(texture);
+    if (update) updateTexture();
 
     return sprite;
+}
+
+void Mandelbrot::updateTexture() {
+    texture.update(image);
 }
 
 void Mandelbrot::genLine() {

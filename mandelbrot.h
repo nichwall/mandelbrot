@@ -6,13 +6,14 @@
 class Mandelbrot {
     public:
         Mandelbrot(int resolution);
-        sf::Sprite generate();
+        sf::Sprite generate(bool udpate = true);
         void reset();
         void setIterations(int iterations);
         void setColorMultiple(int multiple);
         void zoomIn(int x, int y);
         void zoomOut(int x, int y);
         void saveImage();
+        void updateTexture();
         void drag(sf::Vector2i old_position, sf::Vector2i new_position);
         int getColorMultiple();
         int getResolution();

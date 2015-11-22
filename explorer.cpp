@@ -3,13 +3,36 @@
 #include <unistd.h>
 #include <iostream>
 
+struct zoomParameters {
+    Viewer *view;
+    sf::Vector2f oldc;
+    sf::Vector2f newc;
+    bool zoom;
+} param;
+
 double interpolate(double min, double max, int range) { return (max-min)/range; }
+
+void zoom() {
+    double inc_drag_x = interpolate(param.oldc.x, param.newc.x, 50);
+    double inc_drag_y = interpolate(param.oldc.y, param.newc.y, 50);
+    double inc_zoom;
+    if (param.zoom) inc_zoom = interpolate(1.0, 0.5, 50);
+    else inc_zoom = interpolate(1.0, 2.0, 50);
+
+    //animate the zoom
+    for (int i=0; i<50; i++) {
+        param.newc.x = param.oldc.x + i * inc_drag_x;
+        param.newc.y = param.oldc.y + i * inc_drag_y;
+        param.view->zoom(param.newc, 1 + i * inc_zoom);
+        param.view->refresh();
+    }
+}
 
 int main() {
     int resolution = 960;
     int iterations = 100;
 
-    double inc_zoom, inc_drag_x, inc_drag_y;
+    bool zoom_in = true;
 
     sf::Vector2i old_position;
     sf::Vector2i new_position;
@@ -42,12 +65,12 @@ int main() {
                     case sf::Keyboard::Up:
                         iterations += 20;
                         brot.setIterations(iterations);
-                        viewer.setSprite(brot.generate());
+                        brot.generate();
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Down:
                         if (iterations > 20) iterations -= 20;
-                        viewer.setSprite(brot.generate());
+                        brot.generate();
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Right:
@@ -55,19 +78,19 @@ int main() {
                         //TODO: now animate the color transition!!!
                         //maybe make a new explorer function for it?
                         //for now, just regenerate:
-                        viewer.setSprite(brot.generate());
+                        brot.generate();
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Left:
                         if (brot.getColorMultiple() > 1)
                             brot.setColorMultiple(brot.getColorMultiple()-1);
                         //TODO: now animate the color transition!!!
-                        viewer.setSprite(brot.generate());
+                        brot.generate();
                         viewer.refresh();
                         break;
                     case sf::Keyboard::R:
                         brot.reset();
-                        viewer.setSprite(brot.generate());
+                        brot.generate();
                         viewer.resetView();
                         viewer.refresh();
                         break;
@@ -80,36 +103,30 @@ int main() {
                 break;
                 
             //if the event is a mousewheel scroll
-            case sf::Event::MouseWheelScrolled:
+            case sf::Event::MouseWheelScrolled: {
+                old_center = viewer.getCenter();
+                new_center.x = event.mouseWheelScroll.x;
+                new_center.y = event.mouseWheelScroll.y;
                 if (event.mouseWheelScroll.delta > 0) {
-                    //TODO: new thread: generate and zoom simultaneously
-                    old_center = viewer.getCenter();
-                    new_center.x = event.mouseWheelScroll.x;
-                    new_center.y = event.mouseWheelScroll.y;
                     brot.zoomIn(new_center.x, new_center.y);
-                    inc_drag_x = interpolate(old_center.x, new_center.x, 50);
-                    inc_drag_y = interpolate(old_center.y, new_center.y, 50);
-                    inc_zoom = interpolate(1.0, 0.5, 50);
-
-                    //animate the zoom
-                    viewer.setFramerate(50);
-                    for (int i=0; i<50; i++) {
-                        new_center.x = old_center.x + i * inc_drag_x;
-                        new_center.y = old_center.y + i * inc_drag_y;
-                        viewer.zoom(new_center, 1 + i * inc_zoom);
-                        viewer.refresh();
-                        //sleep(.2);
-                    }
-                    viewer.setFramerate(10);
+                    zoom_in = true;
                 }
-                else if (event.mouseWheelScroll.delta < 0)
-                    brot.zoomOut(event.mouseWheelScroll.x, event.mouseWheelScroll.y);
-                //TODO: now animate the zoom transition!!!
-                //make a new function for it?
-                viewer.setSprite(brot.generate());
-                viewer.resetView();
-                viewer.refresh();
-                break;
+               else if (event.mouseWheelScroll.delta < 0) {
+                   brot.zoomOut(event.mouseWheelScroll.x, event.mouseWheelScroll.y);
+                   zoom_in = false;
+               }
+               param.view = &viewer;
+               param.oldc = old_center;
+               param.newc = new_center;
+               param.zoom = zoom_in;
+               sf::Thread thread(&zoom);
+               thread.launch();
+               brot.generate(false);
+               thread.wait();
+               brot.updateTexture();
+               viewer.resetView();
+               viewer.refresh();
+               break; }
 
             //if the event is a click:
             case sf::Event::MouseButtonPressed:
@@ -120,7 +137,7 @@ int main() {
 
                 new_position = viewer.getMousePosition();
                 brot.drag(old_position, new_position);
-                viewer.setSprite(brot.generate());
+                brot.generate();
                 viewer.refresh();
                 break;
             default:
