@@ -1,6 +1,5 @@
 #include "viewer.h"
 #include "mandelbrot.h"
-#include <unistd.h>
 #include <iostream>
 
 struct zoomParameters {
@@ -13,14 +12,15 @@ struct zoomParameters {
 double interpolate(double min, double max, int range) { return (max-min)/range; }
 
 void zoom() {
-    double inc_drag_x = interpolate(param.oldc.x, param.newc.x, 50);
-    double inc_drag_y = interpolate(param.oldc.y, param.newc.y, 50);
+    int frames = 30;
+    double inc_drag_x = interpolate(param.oldc.x, param.newc.x, frames);
+    double inc_drag_y = interpolate(param.oldc.y, param.newc.y, frames);
     double inc_zoom;
-    if (param.zoom) inc_zoom = interpolate(1.0, 0.5, 50);
-    else inc_zoom = interpolate(1.0, 2.0, 50);
+    if (param.zoom) inc_zoom = interpolate(1.0, 0.5, frames);
+    else inc_zoom = interpolate(1.0, 2.0, frames);
 
     //animate the zoom
-    for (int i=0; i<50; i++) {
+    for (int i=0; i<frames; i++) {
         param.newc.x = param.oldc.x + i * inc_drag_x;
         param.newc.y = param.oldc.y + i * inc_drag_y;
         param.view->zoom(param.newc, 1 + i * inc_zoom);
@@ -31,6 +31,7 @@ void zoom() {
 int main() {
     int resolution = 960;
     int iterations = 100;
+    double color_inc;
 
     bool zoom_in = true;
 
@@ -74,18 +75,24 @@ int main() {
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Right:
-                        brot.setColorMultiple(brot.getColorMultiple()+1);
-                        //TODO: now animate the color transition!!!
-                        //maybe make a new explorer function for it?
-                        //for now, just regenerate:
-                        brot.generate();
+                        color_inc = interpolate(0, 1, 30);
+                        for (int i=0; i<30; i++) {
+                            brot.setColorMultiple(brot.getColorMultiple() + color_inc);
+                            brot.changeColor();
+                            viewer.refresh();
+                        }
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Left:
-                        if (brot.getColorMultiple() > 1)
-                            brot.setColorMultiple(brot.getColorMultiple()-1);
-                        //TODO: now animate the color transition!!!
-                        brot.generate();
+                        color_inc = interpolate(1, 0, 30);
+                        if (brot.getColorMultiple() >= 2) {
+                            for (int i=0; i<30; i++) {
+                                brot.setColorMultiple(brot.getColorMultiple() + color_inc);
+                                brot.changeColor();
+                                viewer.refresh();
+                            }
+
+                        }
                         viewer.refresh();
                         break;
                     case sf::Keyboard::R:

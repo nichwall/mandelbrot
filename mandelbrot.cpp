@@ -3,12 +3,14 @@
 #include <string.h>
 #include <ctime>
 #include <iostream>
+#include <vector>
 
 int nextLine = 0;
 int palette[3][256];
 void initPalette();
 sf::Mutex mutex1;
 sf::Mutex mutex2;
+int image_array[960][960];
 
 //constructors:
 Mandelbrot::Mandelbrot(int resolution) {
@@ -25,14 +27,16 @@ Mandelbrot::Mandelbrot(int resolution) {
     color_multiple = 1;
 }
 
+Mandelbrot::~Mandelbrot() {}
+
 //accessors:
 int Mandelbrot::getResolution() {return RESOLUTION;}
 
-int Mandelbrot::getColorMultiple() {return color_multiple;}
+double Mandelbrot::getColorMultiple() {return color_multiple;}
 
 void Mandelbrot::setIterations(int iterations) {MAX_ITER = iterations;}
 
-void Mandelbrot::setColorMultiple(int multiple) {color_multiple = multiple;}
+void Mandelbrot::setColorMultiple(double multiple) {color_multiple = multiple;}
 
 int getNextLine() {
     return nextLine++;
@@ -93,7 +97,7 @@ int Mandelbrot::escape(double x0, double y0, int MAX) {
 }
 
 sf::Color Mandelbrot::findColor(int iter) {
-    int i = (iter * color_multiple) % 255;
+    int i = fmod(iter * color_multiple, 255);
     sf::Color color;
     if (iter >= MAX_ITER) color = sf::Color::Black;
     else {
@@ -156,9 +160,19 @@ void Mandelbrot::genLine() {
             //mutex this!
             mutex2.lock();
             image.setPixel(column, row, findColor(iter));
+            image_array[row][column] = iter;
             mutex2.unlock();
         }
     }
+}
+
+void Mandelbrot::changeColor() {
+    for (int i=0; i<RESOLUTION; i++) {
+        for (int j=0; j<RESOLUTION; j++) {
+            image.setPixel(j, i, findColor(image_array[i][j]));
+        }
+    }
+    updateTexture();
 }
 
 void Mandelbrot::zoomIn(int x, int y) {
