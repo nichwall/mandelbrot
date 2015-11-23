@@ -11,6 +11,7 @@ void initPalette();
 sf::Mutex mutex1;
 sf::Mutex mutex2;
 int image_array[960][960];
+bool escape_array[960][960];
 
 //constructors:
 Mandelbrot::Mandelbrot(int resolution) {

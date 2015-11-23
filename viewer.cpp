@@ -9,7 +9,7 @@ Viewer::Viewer(int res) {
     view = &vw;
     view->setViewport(sf::FloatRect(0, 0, 1, 1));
     window->setView(*view);
-    framerateLimit = 70;
+    framerateLimit = 60;
     window->setFramerateLimit(framerateLimit);
 }
 

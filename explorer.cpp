@@ -6,7 +6,7 @@ struct zoomParameters {
     Viewer *view;
     sf::Vector2f oldc;
     sf::Vector2f newc;
-    bool zoom;
+    double zoom;
 } param;
 
 double interpolate(double min, double max, int range) { return (max-min)/range; }
@@ -16,8 +16,7 @@ void zoom() {
     double inc_drag_x = interpolate(param.oldc.x, param.newc.x, frames);
     double inc_drag_y = interpolate(param.oldc.y, param.newc.y, frames);
     double inc_zoom;
-    if (param.zoom) inc_zoom = interpolate(1.0, 0.5, frames);
-    else inc_zoom = interpolate(1.0, 2.0, frames);
+    inc_zoom = interpolate(1.0, param.zoom, frames);
 
     //animate the zoom
     for (int i=0; i<frames; i++) {
@@ -39,12 +38,15 @@ int main() {
     sf::Vector2i new_position;
     sf::Vector2f old_center;
     sf::Vector2f new_center;
+    sf::Vector2f difference;
 
     Viewer viewer(resolution);
     Mandelbrot brot(resolution);
 
     viewer.setSprite(brot.generate());
     viewer.refresh();
+
+    param.view = &viewer;
 
     //main window loop
     while (viewer.isOpen()) {
@@ -64,36 +66,33 @@ int main() {
                         viewer.close();
                         break;
                     case sf::Keyboard::Up:
-                        iterations += 20;
+                        iterations += 40;
                         brot.setIterations(iterations);
                         brot.generate();
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Down:
-                        if (iterations > 20) iterations -= 20;
+                        if (iterations > 40) iterations -= 40;
                         brot.generate();
                         viewer.refresh();
                         break;
                     case sf::Keyboard::Right:
                         color_inc = interpolate(0, 1, 30);
-                        for (int i=0; i<30; i++) {
+                        while (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
                             brot.setColorMultiple(brot.getColorMultiple() + color_inc);
                             brot.changeColor();
                             viewer.refresh();
                         }
-                        viewer.refresh();
                         break;
                     case sf::Keyboard::Left:
                         color_inc = interpolate(1, 0, 30);
-                        if (brot.getColorMultiple() >= 2) {
-                            for (int i=0; i<30; i++) {
+                        while (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+                            if (brot.getColorMultiple() >= 1) {
                                 brot.setColorMultiple(brot.getColorMultiple() + color_inc);
                                 brot.changeColor();
                                 viewer.refresh();
                             }
-
                         }
-                        viewer.refresh();
                         break;
                     case sf::Keyboard::R:
                         brot.reset();
@@ -116,16 +115,14 @@ int main() {
                 new_center.y = event.mouseWheelScroll.y;
                 if (event.mouseWheelScroll.delta > 0) {
                     brot.zoomIn(new_center.x, new_center.y);
-                    zoom_in = true;
+                    param.zoom = 0.5;
                 }
                else if (event.mouseWheelScroll.delta < 0) {
                    brot.zoomOut(event.mouseWheelScroll.x, event.mouseWheelScroll.y);
-                   zoom_in = false;
+                   param.zoom = 2.0;
                }
-               param.view = &viewer;
                param.oldc = old_center;
                param.newc = new_center;
-               param.zoom = zoom_in;
                sf::Thread thread(&zoom);
                thread.launch();
                brot.generate(false);
@@ -138,13 +135,28 @@ int main() {
             //if the event is a click:
             case sf::Event::MouseButtonPressed:
                 old_position = viewer.getMousePosition();
+                old_center = viewer.getCenter();
+                param.oldc.x = old_center.x;
+                param.oldc.y = old_center.y;
+                param.zoom = 1.0;
+                viewer.setFramerate(500);
 
-                //don't do anything until it's released
-                while (sf::Mouse::isButtonPressed(sf::Mouse::Left)) { }
+                while (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+                    new_position = viewer.getMousePosition();
+                    difference.x = new_position.x - old_position.x;
+                    difference.y = new_position.y - old_position.y;
+                    new_center = old_center - difference;
+                    param.newc.x = new_center.x;
+                    param.newc.y = new_center.y;
+                    zoom();
+                    param.oldc = param.newc;
+                }
 
+                viewer.setFramerate(60);
                 new_position = viewer.getMousePosition();
                 brot.drag(old_position, new_position);
                 brot.generate();
+                viewer.resetView();
                 viewer.refresh();
                 break;
             default:
