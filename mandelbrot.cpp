@@ -11,7 +11,16 @@ void initPalette();
 sf::Mutex mutex1;
 sf::Mutex mutex2;
 int image_array[960][960];
-bool escape_array[960][960];
+bool escape_array[960][960] = {{false}};
+
+void zero_escape_array() {
+    int size = sizeof(escape_array)/sizeof(escape_array[0]);
+    for (int i=0; i<size; i++) {
+        for (int j=0; j<size; j++) {
+            escape_array[i][j] = false;
+        }
+    }
+}
 
 //constructors:
 Mandelbrot::Mandelbrot(int resolution) {
@@ -154,15 +163,19 @@ void Mandelbrot::genLine() {
         y = y_max - row * y_inc;
 
         for (column = 0; column < RESOLUTION; column++) {
-            x = x_min + column * x_inc;
 
-            iter = escape(x, y, MAX_ITER);
+            if (escape_array[row][column] == false) {
 
-            //mutex this!
-            mutex2.lock();
-            image.setPixel(column, row, findColor(iter));
-            image_array[row][column] = iter;
-            mutex2.unlock();
+                x = x_min + column * x_inc;
+                iter = escape(x, y, MAX_ITER);
+
+                //mutex this!
+                mutex2.lock();
+                image.setPixel(column, row, findColor(iter));
+                image_array[row][column] = iter;
+                if (iter < MAX_ITER) escape_array[row][column] = true;
+                mutex2.unlock();
+            } 
         }
     }
 }
@@ -177,6 +190,8 @@ void Mandelbrot::changeColor() {
 }
 
 void Mandelbrot::zoomIn(int x, int y) {
+    zero_escape_array();
+    
     double x_center = x_min + x * interpolate(x_min, x_max, RESOLUTION);
     double y_center = y_max - y * interpolate(y_min, y_max, RESOLUTION);
 
@@ -191,6 +206,8 @@ void Mandelbrot::zoomIn(int x, int y) {
 }
 
 void Mandelbrot::zoomOut(int x, int y) {
+    zero_escape_array();
+
     double x_center = x_min + x * interpolate(x_min, x_max, RESOLUTION);
     double y_center = y_max - y * interpolate(y_min, y_max, RESOLUTION);
 
@@ -205,6 +222,7 @@ void Mandelbrot::zoomOut(int x, int y) {
 }
 
 void Mandelbrot::reset() {
+    zero_escape_array();
     x_min = -1.5;
     x_max = 0.5;
     y_min = -1.0;
@@ -225,6 +243,8 @@ void Mandelbrot::saveImage() {
 }
 
 void Mandelbrot::drag(sf::Vector2i old_position, sf::Vector2i new_position) {
+    zero_escape_array();
+    
     //find the size of the imaginary plane, to recreate it:
     double x_length = (x_max - x_min)/2.0;
     double y_length = (y_max - y_min)/2.0;
