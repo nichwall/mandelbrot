@@ -73,6 +73,7 @@ int main() {
                         break;
                     case sf::Keyboard::Down:
                         if (iterations > 40) iterations -= 40;
+                        brot.setIterations(iterations);
                         brot.generate();
                         viewer.refresh();
                         break;
