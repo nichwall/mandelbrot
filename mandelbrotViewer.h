@@ -15,7 +15,8 @@ class MandelbrotViewer {
         int getFramerate() {return framerateLimit;}
         double getColorMultiple() {return color_multiple;}
         sf::Vector2i getMousePosition();
-        sf::Vector2f getCenter() {return view->getCenter();}
+        sf::Vector2f getViewCenter() {return view->getCenter();}
+        sf::Vector2f getMandelbrotCenter();
         bool getEvent(sf::Event&);
         bool isOpen();
         
@@ -25,8 +26,8 @@ class MandelbrotViewer {
         void setFramerate(int rate) {framerateLimit = rate;}
         
         //Functions to change parameters for mandelbrot generation:
-        void changeColor(); //TODO: is this one necessary?
-        void changePos(sf::Vector2f new_center, double zoom_factor); //TODO: will spliting this into two make it faster?
+        void changeColor();
+        void changePos(sf::Vector2<double> new_center, double zoom_factor);
         void changePosView(sf::Vector2f new_center, double zoom_factor);
 
         //Functions ot generate the mandelbrot:
@@ -41,6 +42,10 @@ class MandelbrotViewer {
 
         //Other functions:
         void saveImage();
+
+        //Converts a vector from pixel coordinates to the corresponding
+        //coordinates of the complex plane
+        sf::Vector2<double> pixelToComplex(sf::Vector2f);
 
     private:
         int resolution;
@@ -64,7 +69,7 @@ class MandelbrotViewer {
         //this changes how the colors are displayed
         double color_multiple;
 
-        //this array stores the number of iterations for each pixel TODO
+        //this array stores the number of iterations for each pixel
         std::vector< std::vector<int> > image_array;
 
         //maximum number of iterations to check for. Higher values are slower,

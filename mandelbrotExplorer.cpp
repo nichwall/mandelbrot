@@ -9,6 +9,7 @@ struct zoomParameters {
     sf::Vector2f oldc;
     sf::Vector2f newc;
     double zoom;
+    int frames;
 } param;
 
 //returns range increments to get from min to max
@@ -17,21 +18,16 @@ double interpolate(double min, double max, int range) { return (max-min)/range; 
 //animates the zoom of the viewer (so the viewer zooms while the mandelbrot is generating)
 //uses the struct param as parameters
 void zoom() {
-    int frames = 30;
-    double inc_drag_x = interpolate(param.oldc.x, param.newc.x, frames);
-    double inc_drag_y = interpolate(param.oldc.y, param.newc.y, frames);
-    double inc_zoom = interpolate(1.0, param.zoom, frames);
+    double inc_drag_x = interpolate(param.oldc.x, param.newc.x, param.frames);
+    double inc_drag_y = interpolate(param.oldc.y, param.newc.y, param.frames);
+    double inc_zoom = interpolate(1.0, param.zoom, param.frames);
 
     //animate the zoom
-    for (int i=0; i<frames; i++) {
-        std::cout << "in zoom loop\n";
+    for (int i=0; i<param.frames; i++) {
         param.newc.x = param.oldc.x + i * inc_drag_x;
         param.newc.y = param.oldc.y + i * inc_drag_y;
-        std::cout << "got new center\n";
-        param.viewer->changePos(param.newc, 1 + i * inc_zoom);
-        std::cout << "finished zoom loop\n";
+        param.viewer->changePosView(param.newc, 1 + i * inc_zoom);
         param.viewer->refreshWindow();
-        std::cout << "finished zoom loop\n";
     }
 }
 
@@ -51,15 +47,16 @@ int main() {
 
     //create the mandelbrotviewer instance
     MandelbrotViewer brot(resolution);
-
-    framerateLimit = brot.getFramerate();
-
     brot.resetMandelbrot();
     brot.generate();
     brot.updateMandelbrot();
     brot.refreshWindow();
 
     sf::Event event;
+    framerateLimit = brot.getFramerate();
+
+    //point the zoom function to the 'brot' instance
+    param.viewer = &brot;
 
     //main window loop
     while (brot.isOpen()) {
@@ -93,6 +90,7 @@ int main() {
                             iterations -= 30;
                             if (iterations < 100) iterations = 100;
                             brot.setIterations(iterations);
+                            brot.generate();
                             brot.updateMandelbrot();
                             brot.refreshWindow();
                             break;
@@ -105,6 +103,7 @@ int main() {
                                 brot.updateMandelbrot();
                                 brot.refreshWindow();
                             }
+                            break;
                         //if left arrow, decrease color_multiple until released
                         case sf::Keyboard::Left:
                             color_inc = interpolate(1, 0, 30);
@@ -112,9 +111,11 @@ int main() {
                                 if (brot.getColorMultiple() > 1) {
                                     brot.setColorMultiple(brot.getColorMultiple() + color_inc);
                                     brot.changeColor();
+                                    brot.updateMandelbrot();
                                     brot.refreshWindow();
                                 }
                             }
+                            break;
                         //if R, reset the mandelbrot to the starting image
                         case sf::Keyboard::R:
                             brot.resetMandelbrot();
@@ -137,19 +138,20 @@ int main() {
                 //if the event is a mousewheel scroll, zoom in with the
                 //mouse coordinates as the new center
                 //NOTE: this has to have brackets because it is declaring new variables
-                //TODO: should the thread variable be pre-delcared?
                 case sf::Event::MouseWheelScrolled: {
-                    old_center = brot.getCenter();
+                    //set the zoom frames up so that it is more animated
+                    param.frames = 30;
+                    old_center = brot.getViewCenter();
                     new_center.x = event.mouseWheelScroll.x;
                     new_center.y = event.mouseWheelScroll.y;
 
                     //if it's an upward scroll, get ready to zoom in
                     if (event.mouseWheelScroll.delta > 0) {
-                        brot.changePos(new_center, 0.5);
+                        brot.changePos(brot.pixelToComplex(new_center), 0.5);
                         param.zoom = 0.5;
                     } //if it's a downward scroll, get ready to zoom out
                     else if (event.mouseWheelScroll.delta < 0) {
-                        brot.changePos(new_center, 2.0);
+                        brot.changePos(brot.pixelToComplex(new_center), 2.0);
                         param.zoom = 2.0;
                     }
 
@@ -159,15 +161,14 @@ int main() {
 
                     //start zooming with a worker thread, so that it can generate
                     //the new image while it's zooming
-                    //sf::Thread thread(&zoom);
-                    //thread.launch();
-                    zoom();
+                    sf::Thread thread(&zoom);
+                    thread.launch();
                     
                     //start generating while it's zooming
                     brot.generate();
 
                     //wait for the thread to finish (wait for the zoom to finish)
-                    //thread.wait();
+                    thread.wait();
 
                     //now display the new mandelbrot
                     brot.updateMandelbrot();
@@ -179,11 +180,14 @@ int main() {
                 //if the event is a click, drag the view:
                 case sf::Event::MouseButtonPressed:
 
+                    //set drag frames low so that it will move in real time
+                    param.frames = 2;
+
                     //save the old center/mouse_position as reference
                     temp = brot.getMousePosition();
                     old_position.x = temp.x;
                     old_position.y = temp.y;
-                    old_center = brot.getCenter();
+                    old_center = brot.getViewCenter();
                     param.oldc.x = old_center.x;
                     param.oldc.y = old_center.y;
 
@@ -226,7 +230,18 @@ int main() {
                     temp = brot.getMousePosition();
                     new_position.x = temp.x;
                     new_position.y = temp.y;
-                    brot.changePos(new_position, 1.0);
+
+                    //get the difference of how far it's moved
+                    difference.x = new_position.x - old_position.x;
+                    difference.y = new_position.y - old_position.y;
+
+                    //set the old center
+                    old_center = sf::Vector2f(resolution/2, resolution/2);
+
+                    //calculate the new center
+                    new_center = old_center - difference;
+
+                    brot.changePos(brot.pixelToComplex(new_center), 1.0);
                     brot.generate();
                     brot.resetView();
                     brot.updateMandelbrot();
@@ -237,10 +252,6 @@ int main() {
                     break;
 
             } //end the main event switch statement
-
-            //when done handling events, or if there aren't any events,
-            //refresh the screen
-            brot.refreshWindow(); //TODO: is this really necessary?
 
         } //end the main event loop
 

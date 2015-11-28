@@ -37,7 +37,6 @@ MandelbrotViewer::MandelbrotViewer(int res) {
     size_t size = resolution;
     std::vector< std::vector<int> > array(size, std::vector<int>(size));
     image_array = array;
-    std::cout << "start width: " << area.width << std::endl;
 }
 
 MandelbrotViewer::~MandelbrotViewer() { }
@@ -45,6 +44,14 @@ MandelbrotViewer::~MandelbrotViewer() { }
 //Accessors
 sf::Vector2i MandelbrotViewer::getMousePosition() {
     return sf::Mouse::getPosition(*window);
+}
+
+//return the center of the area of the complex plane
+sf::Vector2f MandelbrotViewer::getMandelbrotCenter() {
+    sf::Vector2f center;
+    center.x = area.left + area.width/2.0;
+    center.y = area.top + area.height/2.0;
+    return center;
 }
 
 //gets the next event from the viewer
@@ -64,27 +71,23 @@ bool MandelbrotViewer::isOpen() {
 void MandelbrotViewer::changeColor() {
     for (int i=0; i<resolution; i++) {
         for (int j=0; j<resolution; j++) {
-            //TODO:
-            //image.setPixel(j, i, findColor(image_array[i][j]));
+            image.setPixel(j, i, findColor(image_array[i][j]));
         }
     }
 }
 
 //changes the parameters of the mandelbrot: sets new center and zooms accordingly
 //does not regenerate or update the image
-//TODO: this function is not yet tested
-void MandelbrotViewer::changePos(sf::Vector2f new_center, double zoom_factor) {
-    std::cout << "starting changePos\n";
-    //std::cout << "width: " << area.width << std::endl;
+void MandelbrotViewer::changePos(sf::Vector2<double> new_center, double zoom_factor) {
     area.width = area.width * zoom_factor;
-    std::cout << "got width\n";
     area.height = area.height * zoom_factor;
     area.left = new_center.x - area.width / 2.0;
     area.top = new_center.y - area.height / 2.0;
     //NOTE: this is a relative zoom
-    std::cout << "finished changePos\n";
 }
 
+//similar to changePos, but it's an absolute zoom and it only changes the view
+//instead of setting new parameters to regenerate the mandelbrot
 void MandelbrotViewer::changePosView(sf::Vector2f new_center, double zoom_factor) {
     //reset the view so that we can apply an absolute zoom, instead of relative
     resetView();
@@ -143,7 +146,7 @@ void MandelbrotViewer::genLine() {
         if (row >= resolution) return;
 
         //calculate the row height in the complex plane
-        y = area.top + area.height - row * y_inc;
+        y = area.top + row * y_inc;
 
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
@@ -153,6 +156,7 @@ void MandelbrotViewer::genLine() {
             //if it's regenerating after a max_iter change, this saves
             //a lot of time. It's disabled for now (TODO)
             //if (escape_array[row][column] == false) {
+            //if (image_array[row][column] != max_iter) {
 
                 //calculate the next x coordinate of the complex plane
                 x = area.left + column * x_inc;
@@ -161,7 +165,6 @@ void MandelbrotViewer::genLine() {
                 //mutex this too so that the image is not accessed multiple times simultaneously
                 mutex2.lock();
                 image.setPixel(column, row, findColor(iter));
-                //TODO:
                 image_array[row][column] = iter;
                 //if (iter < MAX_ITER) escape_array[row][column] = true;
                 mutex2.unlock();
@@ -219,6 +222,15 @@ void MandelbrotViewer::saveImage() {
     //save the image and print confirmation
     image.saveToFile(filename);
     std::cout << "Saved image to " << filename << std::endl;
+}
+
+//Converts a vector from pixel coordinates to the corresponding
+//coordinates on the complex plane
+sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
+    sf::Vector2<double> comp;
+    comp.x = area.left + pix.x * interpolate(area.width, resolution);
+    comp.y = area.top + pix.y * interpolate(area.height, resolution);
+    return comp;
 }
 
 //this function calculates the escape-time of the given coordinate
