@@ -5,3 +5,5 @@ Makefile
 MandelExplorer
 *.png
 *.o
+*.project
+*.cproject
