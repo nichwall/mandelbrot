@@ -139,7 +139,6 @@ void MandelbrotViewer::genLine() {
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
 
-    int count = 0;
     while(true) {
 
         //the mutex avoids multiple threads writing to variables at the same time,
@@ -150,7 +149,7 @@ void MandelbrotViewer::genLine() {
 
         //if all the rows have been generated, stop it from generating outside the bounds
         //of the image
-        if (row >= resolution) {std::cout << "Calculated " << count << " pixels\n"; return;}
+        if (row >= resolution) return;
 
         //calculate the row height in the complex plane
         y = area.top + row * y_inc;
@@ -166,12 +165,11 @@ void MandelbrotViewer::genLine() {
                 iter = max_iter;
             } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
             else {
-                count++;
-
                 //calculate the next x coordinate of the complex plane
                 x = area.left + column * x_inc;
                 iter = escape(x, y);
             }
+
             //mutex this too so that the image is not accessed multiple times simultaneously
             mutex2.lock();
             image.setPixel(column, row, findColor(iter));
