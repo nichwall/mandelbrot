@@ -57,7 +57,7 @@ sf::Vector2f MandelbrotViewer::getMandelbrotCenter() {
 
 //gets the next event from the viewer
 bool MandelbrotViewer::getEvent(sf::Event& event) {
-    return window->pollEvent(event);
+    return window->waitEvent(event);
 }
 
 //checks if the window is open
@@ -112,15 +112,15 @@ void MandelbrotViewer::generate() {
     std::vector<sf::Thread> threadPool;
     for (int i=0; i<THREAD_COUNT; i++) {
         sf::Thread temp_thread(&MandelbrotViewer::genLine, this);
-        threadPool.push_back<temp_thread>;
+        threadPool.push_back(temp_thread);
     }
     // Launch all the threads
     for (int i=0; i<THREAD_COUNT; i++) {
-        threadPool.at(i).launch();
+        threadPool[i].launch();
     }
     // Close the threads
     for (int i=0; i<THREAD_COUNT; i++) {
-        threadPool.at(i).wait();
+        threadPool[i].wait();
     }
 }
 
