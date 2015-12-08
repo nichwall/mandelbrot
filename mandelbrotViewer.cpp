@@ -57,7 +57,7 @@ sf::Vector2f MandelbrotViewer::getMandelbrotCenter() {
 
 //gets the next event from the viewer
 bool MandelbrotViewer::getEvent(sf::Event& event) {
-    return window->pollEvent(event);
+    return window->waitEvent(event);
 }
 
 //checks if the window is open
@@ -133,6 +133,9 @@ void MandelbrotViewer::genLine() {
     double x_inc = interpolate(area.width, resolution);
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
+
+    //this line stores all the calculated colors for
+    //std::vector<sf::Color> line;
 
     while(true) {
 
@@ -251,6 +254,8 @@ int MandelbrotViewer::escape(double x0, double y0) {
         y_check = y;
         period += period;
 
+        //it checks the first two (period) iterations for repeats, then the next four,
+        //then the next eight, etc. up to max_iter
         if (period > max_iter) period = max_iter;
         for (; iter < period; iter++) {
             y = x * y;
@@ -306,10 +311,12 @@ void MandelbrotViewer::initPalette() {
         smoosh(sf::Color::Blue, sf::Color::White, 64, 144);
         smoosh(sf::Color::White, orange, 144, 196);
         smoosh(orange, sf::Color::Black, 196, 256);
+    //scheme two is black:green:blue:black
     } else if (scheme == 2) {
         smoosh(sf::Color::Black, sf::Color::Green, 0, 85);
         smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
         smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
+    //scheme three is black:red:black
     } else if (scheme == 3) {
         smoosh(sf::Color::Black, sf::Color::Red, 0, 200);
         smoosh(sf::Color::Red, sf::Color::Black, 200, 256);
