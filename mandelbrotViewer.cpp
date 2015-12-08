@@ -2,9 +2,6 @@
 #include <string.h>
 #include <iostream>
 #include <ctime>
-//#include <thread>
-#include <memory>
-#include <vector>
 
 //initialize a couple of global objects
 sf::Mutex mutex1;
@@ -107,29 +104,29 @@ void MandelbrotViewer::changePosView(sf::Vector2f new_center, double zoom_factor
 
 //generate the mandelbrot
 void MandelbrotViewer::generate() {
+    if (last_max_iter < max_iter) {
+        std::cout << "Iter increased\n";
+    } else if (last_max_iter > max_iter) {
+        std::cout << "Iter decreased\n";
+    }
 
     //make sure it starts at line 0
     nextLine = 0;
 
-    // create the thread pool
-//    std::vector<std::thread> threadPool;
-//    std::vector<sf::Thread> threadPool;
-    std::vector< std::unique_ptr<sf::Thread> > threadPool;
-    for (int i=0; i<THREAD_COUNT; i++) {
-//        std::thread t_thread([this]() {genLine();});
-        sf::Thread temp (&MandelbrotViewer::genLine, this);
-        threadPool.push_back(std::make_unique<sf::Thread> (sf::Thread (&MandelbrotViewer::genLine, this)));
-//        threadPool.push_back(std::make_unique<sf::Thread>( ));
-//        sf::Thread temp_thread(&MandelbrotViewer::genLine, this);
-    }
-    // Start the threads
-    for (int i=0; i<THREAD_COUNT; i++) {
-        threadPool.at(i)->launch();
-    }
-    // Close the threads
-    for (int i=0; i<THREAD_COUNT; i++) {
-        threadPool.at(i)->wait();
-    }
+    sf::Thread thread1(&MandelbrotViewer::genLine, this);
+    sf::Thread thread2(&MandelbrotViewer::genLine, this);
+    sf::Thread thread3(&MandelbrotViewer::genLine, this);
+    sf::Thread thread4(&MandelbrotViewer::genLine, this);
+
+    thread1.launch();
+    thread2.launch();
+    thread3.launch();
+    thread4.launch();
+
+    thread1.wait();
+    thread2.wait();
+    thread3.wait();
+    thread4.wait();
 }
 
 //this is a private worker thread function. Each thread picks the next ungenerated
@@ -142,6 +139,7 @@ void MandelbrotViewer::genLine() {
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
 
+    int count = 0;
     while(true) {
 
         //the mutex avoids multiple threads writing to variables at the same time,
@@ -152,7 +150,7 @@ void MandelbrotViewer::genLine() {
 
         //if all the rows have been generated, stop it from generating outside the bounds
         //of the image
-        if (row >= resolution) return;
+        if (row >= resolution) {std::cout << "Calculated " << count << " pixels\n"; return;}
 
         //calculate the row height in the complex plane
         y = area.top + row * y_inc;
@@ -160,15 +158,25 @@ void MandelbrotViewer::genLine() {
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
 
+            // Check if we increased iterations and if the pixel already diverged
+            if ( last_max_iter < max_iter && image_array[row][column] != last_max_iter ) {
+                iter = image_array[row][column];
+            } // Check if we decreased iterations and if the pixel already converged
+            else if ( last_max_iter > max_iter && image_array[row][column] == last_max_iter) {
+                iter = max_iter;
+            } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
+            else {
+                count++;
+
                 //calculate the next x coordinate of the complex plane
                 x = area.left + column * x_inc;
                 iter = escape(x, y);
-
-                //mutex this too so that the image is not accessed multiple times simultaneously
-                mutex2.lock();
-                image.setPixel(column, row, findColor(iter));
-                image_array[row][column] = iter;
-                mutex2.unlock();
+            }
+            //mutex this too so that the image is not accessed multiple times simultaneously
+            mutex2.lock();
+            image.setPixel(column, row, findColor(iter));
+            image_array[row][column] = iter;
+            mutex2.unlock();
         }
     }
 }
