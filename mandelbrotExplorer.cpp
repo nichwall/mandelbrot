@@ -96,7 +96,7 @@ int main() {
                             break;
                         //if right arrow, increase color_multiple until released
                         case sf::Keyboard::Right:
-                            color_inc = interpolate(0, 1, 30);
+                            color_inc = interpolate(0, 1, 25);
                             while (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
                                 brot.setColorMultiple(brot.getColorMultiple() + color_inc);
                                 brot.changeColor();
@@ -106,7 +106,7 @@ int main() {
                             break;
                         //if left arrow, decrease color_multiple until released
                         case sf::Keyboard::Left:
-                            color_inc = interpolate(1, 0, 30);
+                            color_inc = interpolate(1, 0, 25);
                             while (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
                                 if (brot.getColorMultiple() > 1) {
                                     brot.setColorMultiple(brot.getColorMultiple() + color_inc);
@@ -115,6 +115,27 @@ int main() {
                                     brot.refreshWindow();
                                 }
                             }
+                            break;
+                        //if it's a 1, change to color scheme 1
+                        case sf::Keyboard::Num1:
+                            brot.setColorScheme(1);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
+                            break;
+                        //if it's a 2, change to color scheme 2
+                        case sf::Keyboard::Num2:
+                            brot.setColorScheme(2);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
+                            break;
+                        //if it's a 3, change to color scheme 3
+                        case sf::Keyboard::Num3:
+                            brot.setColorScheme(3);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
                             break;
                         //if R, reset the mandelbrot to the starting image
                         case sf::Keyboard::R:

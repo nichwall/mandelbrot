@@ -4,6 +4,12 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 
+struct Color {
+    int r;
+    int g;
+    int b;
+};
+
 class MandelbrotViewer {
     public:
         //This constructor creates a new viewer with specified resolution
@@ -24,6 +30,7 @@ class MandelbrotViewer {
         void setIterations(int iter) {max_iter = iter;}
         void setColorMultiple(double mult) {color_multiple = mult;}
         void setFramerate(int rate) {framerateLimit = rate;}
+        void setColorScheme(int newScheme) {scheme = newScheme; initPalette();}
         
         //Functions to change parameters for mandelbrot generation:
         void changeColor();
@@ -68,6 +75,7 @@ class MandelbrotViewer {
         
         //this changes how the colors are displayed
         double color_multiple;
+        int scheme;
 
         //this array stores the number of iterations for each pixel
         std::vector< std::vector<int> > image_array;
@@ -96,6 +104,7 @@ class MandelbrotViewer {
         //color scheme each time it is needed
         int palette[3][256];
         void initPalette();
+        void smoosh(sf::Color c1, sf::Color c2, int min, int max);
 };
 
 #endif

@@ -32,6 +32,7 @@ MandelbrotViewer::MandelbrotViewer(int res) {
     texture.create(resolution, resolution);
     image.create(resolution, resolution, sf::Color::Black);
     sprite.setTexture(texture);
+    scheme = 1;
     initPalette(); 
 
     size_t size = resolution;
@@ -295,14 +296,48 @@ int coerce(int number) {
 
 //Sets up the palette array
 void MandelbrotViewer::initPalette() {
-    int r, g, b;
-    for (int i = 0; i <= 255; i++) {
-        r = (int) (23.45 - 1.880*i + 0.0461*i*i - 0.000152*i*i*i);
-        g = (int) (17.30 - 0.417*i + 0.0273*i*i - 0.000101*i*i*i);
-        b = (int) (25.22 + 7.902*i - 0.0681*i*i + 0.000145*i*i*i);
+    //scheme one is black:blue:white:orange:black
+    if (scheme == 1) {
+        sf::Color orange;
+        orange.r = 255;
+        orange.g = 165;
+        orange.b = 0;
+        smoosh(sf::Color::Black, sf::Color::Blue, 0, 64);
+        smoosh(sf::Color::Blue, sf::Color::White, 64, 144);
+        smoosh(sf::Color::White, orange, 144, 196);
+        smoosh(orange, sf::Color::Black, 196, 256);
+    } else if (scheme == 2) {
+        smoosh(sf::Color::Black, sf::Color::Green, 0, 85);
+        smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
+        smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
+    } else if (scheme == 3) {
+        smoosh(sf::Color::Black, sf::Color::Red, 0, 200);
+        smoosh(sf::Color::Red, sf::Color::Black, 200, 256);
+    } else {
+        int r, g, b;
+        for (int i = 0; i <= 255; i++) {
+            r = (int) (23.45 - 1.880*i + 0.0461*i*i - 0.000152*i*i*i);
+            g = (int) (17.30 - 0.417*i + 0.0273*i*i - 0.000101*i*i*i);
+            b = (int) (25.22 + 7.902*i - 0.0681*i*i + 0.000145*i*i*i);
 
-        palette[0][i] = coerce(r);
-        palette[1][i] = coerce(g);
-        palette[2][i] = coerce(b);
+            palette[0][i] = coerce(r);
+            palette[1][i] = coerce(g);
+            palette[2][i] = coerce(b);
+        }
+    }
+}
+
+//Smooshes two colors together, and writes them to the palette in the specified range
+void MandelbrotViewer::smoosh(sf::Color c1, sf::Color c2, int min, int max) {
+    int range = max-min;
+    float r_inc = interpolate(c1.r, c2.r, range);
+    float g_inc = interpolate(c1.g, c2.g, range);
+    float b_inc = interpolate(c1.b, c2.b, range);
+
+    //loop through the palette setting new colors
+    for (int i=0; i < range; i++) {
+        palette[0][min+i] = (int) (c1.r + i * r_inc);
+        palette[1][min+i] = (int) (c1.g + i * g_inc);
+        palette[2][min+i] = (int) (c1.b + i * b_inc);
     }
 }
