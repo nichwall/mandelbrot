@@ -134,8 +134,9 @@ void MandelbrotViewer::genLine() {
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
 
-    //this line stores all the calculated colors for
-    //std::vector<sf::Color> line;
+    //this stores all the colors and iterations per line
+    std::vector<sf::Color> lineColor;
+    std::vector<int> lineIter;
 
     while(true) {
 
@@ -154,26 +155,27 @@ void MandelbrotViewer::genLine() {
 
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
+        
+            //calculate the next x coordinate of the complex plane
+            x = area.left + column * x_inc;
+            iter = escape(x, y);
 
-            
-            //check if we already know that that point escapes.
-            //if it's regenerating after a max_iter change, this saves
-            //a lot of time. It's disabled for now (TODO)
-            //if (escape_array[row][column] == false) {
-            //if (image_array[row][column] != max_iter) {
-
-                //calculate the next x coordinate of the complex plane
-                x = area.left + column * x_inc;
-                iter = escape(x, y);
-
-                //mutex this too so that the image is not accessed multiple times simultaneously
-                mutex2.lock();
-                image.setPixel(column, row, findColor(iter));
-                image_array[row][column] = iter;
-                //if (iter < MAX_ITER) escape_array[row][column] = true;
-                mutex2.unlock();
-            //} 
+            //save the calculated values into these vectors
+            lineColor.push_back(findColor(iter));
+            lineIter.push_back(iter);
         }
+        
+        //now push the changes that have been calculated to the image itself
+        //this uses mutexes for each line instead of each pixel
+        mutex2.lock();
+        for (int i=0; i<resolution; i++) {
+            image.setPixel(i, row, lineColor[i]);
+            image_array[row] = lineIter;
+        }
+        mutex2.unlock();
+        //reset the line vectors for the next line generation
+        lineColor.clear();
+        lineIter.clear();
     }
 }
 
