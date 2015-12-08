@@ -104,11 +104,6 @@ void MandelbrotViewer::changePosView(sf::Vector2f new_center, double zoom_factor
 
 //generate the mandelbrot
 void MandelbrotViewer::generate() {
-    if (last_max_iter < max_iter) {
-        std::cout << "Iter increased\n";
-    } else if (last_max_iter > max_iter) {
-        std::cout << "Iter decreased\n";
-    }
 
     //make sure it starts at line 0
     nextLine = 0;
