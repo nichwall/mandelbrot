@@ -134,9 +134,8 @@ void MandelbrotViewer::genLine() {
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
 
-    //this stores all the colors and iterations per line
-    std::vector<sf::Color> lineColor;
-    std::vector<int> lineIter;
+    //this line stores all the calculated colors for
+    //std::vector<sf::Color> line;
 
     while(true) {
 
@@ -155,27 +154,17 @@ void MandelbrotViewer::genLine() {
 
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
-        
-            //calculate the next x coordinate of the complex plane
-            x = area.left + column * x_inc;
-            iter = escape(x, y);
 
-            //save the calculated values into these vectors
-            lineColor.push_back(findColor(iter));
-            lineIter.push_back(iter);
+                //calculate the next x coordinate of the complex plane
+                x = area.left + column * x_inc;
+                iter = escape(x, y);
+
+                //mutex this too so that the image is not accessed multiple times simultaneously
+                mutex2.lock();
+                image.setPixel(column, row, findColor(iter));
+                image_array[row][column] = iter;
+                mutex2.unlock();
         }
-        
-        //now push the changes that have been calculated to the image itself
-        //this uses mutexes for each line instead of each pixel
-        mutex2.lock();
-        for (int i=0; i<resolution; i++) {
-            image.setPixel(i, row, lineColor[i]);
-            image_array[row] = lineIter;
-        }
-        mutex2.unlock();
-        //reset the line vectors for the next line generation
-        lineColor.clear();
-        lineIter.clear();
     }
 }
 
