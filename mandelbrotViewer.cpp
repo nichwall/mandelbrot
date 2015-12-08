@@ -160,13 +160,6 @@ void MandelbrotViewer::genLine() {
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
 
-            
-            //check if we already know that that point escapes.
-            //if it's regenerating after a max_iter change, this saves
-            //a lot of time. It's disabled for now (TODO)
-            //if (escape_array[row][column] == false) {
-            //if (image_array[row][column] != max_iter) {
-
                 //calculate the next x coordinate of the complex plane
                 x = area.left + column * x_inc;
                 iter = escape(x, y);
@@ -175,9 +168,7 @@ void MandelbrotViewer::genLine() {
                 mutex2.lock();
                 image.setPixel(column, row, findColor(iter));
                 image_array[row][column] = iter;
-                //if (iter < MAX_ITER) escape_array[row][column] = true;
                 mutex2.unlock();
-            //} 
         }
     }
 }
