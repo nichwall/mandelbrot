@@ -2,6 +2,9 @@
 #include <string.h>
 #include <iostream>
 #include <ctime>
+//#include <thread>
+#include <memory>
+#include <vector>
 
 //initialize a couple of global objects
 sf::Mutex mutex1;
@@ -109,18 +112,23 @@ void MandelbrotViewer::generate() {
     nextLine = 0;
 
     // create the thread pool
-    std::vector<sf::Thread> threadPool;
+//    std::vector<std::thread> threadPool;
+//    std::vector<sf::Thread> threadPool;
+    std::vector< std::unique_ptr<sf::Thread> > threadPool;
     for (int i=0; i<THREAD_COUNT; i++) {
-        sf::Thread temp_thread(&MandelbrotViewer::genLine, this);
-        threadPool.push_back(temp_thread);
+//        std::thread t_thread([this]() {genLine();});
+        sf::Thread temp (&MandelbrotViewer::genLine, this);
+        threadPool.push_back(std::make_unique<sf::Thread> (sf::Thread (&MandelbrotViewer::genLine, this)));
+//        threadPool.push_back(std::make_unique<sf::Thread>( ));
+//        sf::Thread temp_thread(&MandelbrotViewer::genLine, this);
     }
-    // Launch all the threads
+    // Start the threads
     for (int i=0; i<THREAD_COUNT; i++) {
-        threadPool[i].launch();
+        threadPool.at(i)->launch();
     }
     // Close the threads
     for (int i=0; i<THREAD_COUNT; i++) {
-        threadPool[i].wait();
+        threadPool.at(i)->wait();
     }
 }
 
