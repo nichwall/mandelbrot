@@ -122,6 +122,8 @@ void MandelbrotViewer::generate() {
     thread2.wait();
     thread3.wait();
     thread4.wait();
+
+    last_max_iter = max_iter;
 }
 
 //this is a private worker thread function. Each thread picks the next ungenerated
@@ -153,11 +155,11 @@ void MandelbrotViewer::genLine() {
         for (column = 0; column < resolution; column++) {
 
             // Check if we increased iterations and if the pixel already diverged
-            if ( last_max_iter < max_iter && image_array[row][column] != last_max_iter ) {
+            if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
                 iter = image_array[row][column];
             } // Check if we decreased iterations and if the pixel already converged
-            else if ( last_max_iter > max_iter && image_array[row][column] == last_max_iter) {
-                iter = max_iter;
+            else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
+                iter = image_array[row][column];
             } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
             else {
                 //calculate the next x coordinate of the complex plane
