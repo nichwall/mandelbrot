@@ -185,6 +185,7 @@ void MandelbrotViewer::resetMandelbrot() {
     area.width = 2;
     area.height = 2;
     max_iter = 100;
+    last_max_iter = 100;
     color_multiple = 1;
 }
 
@@ -313,7 +314,7 @@ void MandelbrotViewer::initPalette() {
         smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
         smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
     } else if (scheme == 3) {
-        smoosh(sf::Color::Black, sf::Color::Red, 0, 200);
+        smoosh(sf::Color::Red, sf::Color::Red, 0, 200);
         smoosh(sf::Color::Red, sf::Color::Black, 200, 256);
     } else {
         int r, g, b;
