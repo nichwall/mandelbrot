@@ -122,6 +122,8 @@ void MandelbrotViewer::generate() {
     thread2.wait();
     thread3.wait();
     thread4.wait();
+
+    last_max_iter = max_iter;
 }
 
 //this is a private worker thread function. Each thread picks the next ungenerated
@@ -133,9 +135,6 @@ void MandelbrotViewer::genLine() {
     double x_inc = interpolate(area.width, resolution);
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
-
-    //this line stores all the calculated colors for
-    //std::vector<sf::Color> line;
 
     while(true) {
 
@@ -155,15 +154,24 @@ void MandelbrotViewer::genLine() {
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
 
+            // Check if we increased iterations and if the pixel already diverged
+            if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
+                iter = image_array[row][column];
+            } // Check if we decreased iterations and if the pixel already converged
+            else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
+                iter = image_array[row][column];
+            } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
+            else {
                 //calculate the next x coordinate of the complex plane
                 x = area.left + column * x_inc;
                 iter = escape(x, y);
+            }
 
-                //mutex this too so that the image is not accessed multiple times simultaneously
-                mutex2.lock();
-                image.setPixel(column, row, findColor(iter));
-                image_array[row][column] = iter;
-                mutex2.unlock();
+            //mutex this too so that the image is not accessed multiple times simultaneously
+            mutex2.lock();
+            image.setPixel(column, row, findColor(iter));
+            image_array[row][column] = iter;
+            mutex2.unlock();
         }
     }
 }
@@ -245,8 +253,6 @@ int MandelbrotViewer::escape(double x0, double y0) {
         y_check = y;
         period += period;
 
-        //it checks the first two (period) iterations for repeats, then the next four,
-        //then the next eight, etc. up to max_iter
         if (period > max_iter) period = max_iter;
         for (; iter < period; iter++) {
             y = x * y;
@@ -302,12 +308,10 @@ void MandelbrotViewer::initPalette() {
         smoosh(sf::Color::Blue, sf::Color::White, 64, 144);
         smoosh(sf::Color::White, orange, 144, 196);
         smoosh(orange, sf::Color::Black, 196, 256);
-    //scheme two is black:green:blue:black
     } else if (scheme == 2) {
         smoosh(sf::Color::Black, sf::Color::Green, 0, 85);
         smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
         smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
-    //scheme three is black:red:black
     } else if (scheme == 3) {
         smoosh(sf::Color::Black, sf::Color::Red, 0, 200);
         smoosh(sf::Color::Red, sf::Color::Black, 200, 256);
