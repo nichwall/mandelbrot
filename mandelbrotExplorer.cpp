@@ -32,7 +32,7 @@ void zoom() {
 }
 
 int main() {
-    int resolution = 720;
+    int resolution = 820;
     int iterations = 100;
     int framerateLimit;
     float color_inc = interpolate(0, 1, 30);
@@ -116,6 +116,7 @@ int main() {
                                 }
                             }
                             break;
+                        //TODO: make a separate switch for color schemes to shorten code
                         //if it's a 1, change to color scheme 1
                         case sf::Keyboard::Num1:
                             brot.setColorScheme(1);
@@ -133,6 +134,34 @@ int main() {
                         //if it's a 3, change to color scheme 3
                         case sf::Keyboard::Num3:
                             brot.setColorScheme(3);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
+                            break;
+                        //if it's a 4, change to color scheme 4
+                        case sf::Keyboard::Num4:
+                            brot.setColorScheme(4);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
+                            break;
+                        //if it's a 5, change to color scheme 5
+                        case sf::Keyboard::Num5:
+                            brot.setColorScheme(5);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
+                            break;
+                        //if it's a 6, change to color scheme 6
+                        case sf::Keyboard::Num6:
+                            brot.setColorScheme(6);
+                            brot.changeColor();
+                            brot.updateMandelbrot();
+                            brot.refreshWindow();
+                            break;
+                        //if it's a 7, change to color scheme 7
+                        case sf::Keyboard::Num7:
+                            brot.setColorScheme(7);
                             brot.changeColor();
                             brot.updateMandelbrot();
                             brot.refreshWindow();

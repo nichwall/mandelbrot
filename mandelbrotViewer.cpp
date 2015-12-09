@@ -299,34 +299,82 @@ int coerce(int number) {
 
 //Sets up the palette array
 void MandelbrotViewer::initPalette() {
-    //scheme one is black:blue:white:orange:black
-    if (scheme == 1) {
-        sf::Color orange;
-        orange.r = 255;
-        orange.g = 165;
-        orange.b = 0;
-        smoosh(sf::Color::Black, sf::Color::Blue, 0, 64);
-        smoosh(sf::Color::Blue, sf::Color::White, 64, 144);
-        smoosh(sf::Color::White, orange, 144, 196);
-        smoosh(orange, sf::Color::Black, 196, 256);
-    } else if (scheme == 2) {
-        smoosh(sf::Color::Black, sf::Color::Green, 0, 85);
-        smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
-        smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
-    } else if (scheme == 3) {
-        smoosh(sf::Color::Red, sf::Color::Red, 0, 200);
-        smoosh(sf::Color::Red, sf::Color::Black, 200, 256);
-    } else {
-        int r, g, b;
-        for (int i = 0; i <= 255; i++) {
-            r = (int) (23.45 - 1.880*i + 0.0461*i*i - 0.000152*i*i*i);
-            g = (int) (17.30 - 0.417*i + 0.0273*i*i - 0.000101*i*i*i);
-            b = (int) (25.22 + 7.902*i - 0.0681*i*i + 0.000145*i*i*i);
+    //define some non-standard colors
+    sf::Color orange;
+    orange.r = 255;
+    orange.g = 165;
+    orange.b = 0;
+    sf::Color pink;
+    pink.r = 255;
+    pink.g = 135;
+    pink.b = 135;
+    sf::Color dark_red;
+    dark_red.r = 209;
+    dark_red.g = 2;
+    dark_red.b = 2;
+    sf::Color dark_green;
+    dark_green.r = 8;
+    dark_green.g = 172;
+    dark_green.b = 8;
+    sf::Color light_green;
+    light_green.r = 115;
+    light_green.g = 255;
+    light_green.b = 115;
+    switch (scheme) {
+        //scheme one is black:blue:white:orange:black
+        case 1:
+            smoosh(sf::Color::Black, sf::Color::Blue, 0, 64);
+            smoosh(sf::Color::Blue, sf::Color::White, 64, 144);
+            smoosh(sf::Color::White, orange, 144, 196);
+            smoosh(orange, sf::Color::Black, 196, 256);
+            break;
+        //scheme two is black:green:blue:black
+        case 2:
+            smoosh(sf::Color::Black, sf::Color::Green, 0, 85);
+            smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
+            smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
+            break;
+        //scheme three is black:red:orange:black
+        case 3:
+            smoosh(sf::Color::Black, sf::Color::Red, 0, 180);
+            smoosh(sf::Color::Red, orange, 180, 215);
+            smoosh(orange, sf::Color::Black, 215, 256);
+            break;
+        //scheme four is black:cyan:white:black
+        case 4:
+            smoosh(sf::Color::Black, sf::Color::Cyan, 0, 110);
+            smoosh(sf::Color::Cyan, sf::Color::White, 110, 220);
+            smoosh(sf::Color::White, sf::Color::Black, 220, 256);
+            break;
+        //scheme five is red:orange:yellow:green:blue:magenta:red
+        case 5:
+            smoosh(sf::Color::Red, orange, 0, 42);
+            smoosh(orange, sf::Color::Yellow, 42, 84);
+            smoosh(sf::Color::Yellow, sf::Color::Green, 84, 127);
+            smoosh(sf::Color::Green, sf::Color::Blue, 127, 170);
+            smoosh(sf::Color::Blue, sf::Color::Magenta, 170, 212);
+            smoosh(sf::Color::Magenta, sf::Color::Red, 212, 256);
+            break;
+        //scheme six is dark_red:pink, then dark_green:light_green
+        case 6:
+            smoosh(dark_red, pink, 0, 128);
+            smoosh(dark_green, light_green, 128, 256);
+            break;
+        //scheme seven is smoky... black:white
+        case 7:
+            smoosh(sf::Color::White, sf::Color::Black, 0, 256);
+            break;
+        default:
+            int r, g, b;
+            for (int i = 0; i <= 255; i++) {
+                r = (int) (23.45 - 1.880*i + 0.0461*i*i - 0.000152*i*i*i);
+                g = (int) (17.30 - 0.417*i + 0.0273*i*i - 0.000101*i*i*i);
+                b = (int) (25.22 + 7.902*i - 0.0681*i*i + 0.000145*i*i*i);
 
-            palette[0][i] = coerce(r);
-            palette[1][i] = coerce(g);
-            palette[2][i] = coerce(b);
-        }
+                palette[0][i] = coerce(r);
+                palette[1][i] = coerce(g);
+                palette[2][i] = coerce(b);
+            }
     }
 }
 
