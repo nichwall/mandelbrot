@@ -209,6 +209,9 @@ int main() {
                     param.oldc = old_center;
                     param.newc = new_center;
 
+                    //SFML doesn't like having a window active in more than one thread
+                    brot.setWindowActive(false);
+
                     //start zooming with a worker thread, so that it can generate
                     //the new image while it's zooming
                     sf::Thread thread(&zoom);
@@ -219,6 +222,9 @@ int main() {
 
                     //wait for the thread to finish (wait for the zoom to finish)
                     thread.wait();
+
+                    //now reactivate the window
+                    brot.setWindowActive(true);
 
                     //now display the new mandelbrot
                     brot.updateMandelbrot();

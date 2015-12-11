@@ -46,6 +46,7 @@ class MandelbrotViewer {
         void resetView();
         void close();
         void updateMandelbrot();
+        void setWindowActive(bool);
 
         //Other functions:
         void saveImage();

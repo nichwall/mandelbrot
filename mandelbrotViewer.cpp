@@ -214,6 +214,10 @@ void MandelbrotViewer::updateMandelbrot() {
     texture.update(image);
 }
 
+void MandelbrotViewer::setWindowActive(bool setting) {
+    window->setActive(setting);
+}
+
 //saves the currently displayed image to a png with a timestamp in the title
 void MandelbrotViewer::saveImage() {
     //set up the timestamp filename
