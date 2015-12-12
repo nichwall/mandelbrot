@@ -1,4 +1,5 @@
 #include "mandelbrotViewer.h"
+#include <iostream>
 
 //global stuff
 int iterations = 100;
@@ -159,6 +160,21 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         //if S, save the current image
         case sf::Keyboard::S:
             brot->saveImage();
+            break;
+        case sf::Keyboard::H:
+            brot->enableOverlay(true);
+            while(true) {
+                brot->getEvent(*event);
+                if (event->type == sf::Event::KeyPressed) {
+                    if (event->key.code == sf::Keyboard::H || event->key.code == sf::Keyboard::Escape) {
+                        break;
+                    } else if (event-> key.code == sf::Keyboard::Q) {
+                        brot->close();
+                        break;
+                    }
+                }
+            }
+            brot->enableOverlay(false);
             break;
         //end the keypress switch
         default:

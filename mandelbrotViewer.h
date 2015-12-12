@@ -49,7 +49,8 @@ class MandelbrotViewer {
         void setWindowActive(bool);
 
         //Other functions:
-        void saveImage();
+        void saveImage(); //save the image as a png in the local folder
+        void enableOverlay(bool); //enable a help overlay with controls, etc.
 
         //Converts a vector from pixel coordinates to the corresponding
         //coordinates of the complex plane
@@ -68,6 +69,7 @@ class MandelbrotViewer {
         sf::Sprite sprite;
         sf::Image image;
         sf::Texture texture;
+        sf::Font font;
 
         //Parameters to generate the mandelbrot:
         

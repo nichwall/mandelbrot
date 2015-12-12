@@ -1,6 +1,8 @@
 #include "mandelbrotViewer.h"
 #include <string.h>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <ctime>
 
 //initialize a couple of global objects
@@ -34,6 +36,10 @@ MandelbrotViewer::MandelbrotViewer(int res) {
     sprite.setTexture(texture);
     scheme = 1;
     initPalette(); 
+
+    //initialize the font for the overlay
+    if (!font.loadFromFile("cour.ttf"))
+        std::cout << "ERROR: unable to load font\n";
 
     size_t size = resolution;
     std::vector< std::vector<int> > array(size, std::vector<int>(size));
@@ -240,6 +246,61 @@ void MandelbrotViewer::saveImage() {
     //save the image and print confirmation
     image.saveToFile(filename);
     std::cout << "Saved image to " << filename << std::endl;
+}
+
+//enables an overlay that dims the screen and displays controls/stats/etc.
+void MandelbrotViewer::enableOverlay(bool enable) {
+    sf::Text controls;
+    sf::Text stats;
+    if (enable) {
+        //set up the controls part
+        controls.setFont(font);
+        controls.setString("Help Menu (H)\n\n\n"
+                        "Controls\n"
+                        "------------------------------------------------\n"
+                        "Left/Right arrows - Change colors\n"
+                        "Up/Down arrows    - Increase/decrease iterations\n"
+                        "Click and Drag    - Move around\n"
+                        "Numbers 1-7       - Change color scheme\n"
+                        "Scroll            - Zoom in/out\n"
+                        "H                 - Help menu\n"
+                        "S                 - Save image\n"
+                        "R                 - Reset\n"
+                        "Q                 - Quit\n"
+                        "------------------------------------------------\n");
+        controls.setCharacterSize(24);
+        controls.setColor(sf::Color::White);
+        controls.setPosition(40, 50);
+
+        //set up the stats part
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(20);
+        ss << "Resolution: " << resolution << "x" << resolution << "\n\n";
+        ss << "Coordinates: \n";
+        ss << "x: " << std::setw(23) << area.left << "  y: " << std::setw(23) << area.top << "\n";
+        ss << "   " << std::setw(23) << area.left + area.width << "     " << std::setw(23) << area.top + area.height;
+        ss << std::defaultfloat;
+        ss << "\n\nZoom factor: " << 2/area.width;
+
+        stats.setFont(font);
+        stats.setString(ss.str());
+        stats.setCharacterSize(24);
+        stats.setPosition(40, 474);
+
+        //set up the screen fade
+        sf::RectangleShape rectangle;
+        rectangle.setSize(sf::Vector2f(resolution, resolution));
+        rectangle.setFillColor(sf::Color(0, 0, 0, 192));
+        rectangle.setPosition(0, 0);
+
+        //draw to the screen
+        window->draw(rectangle);
+        window->draw(controls);
+        window->draw(stats);
+        window->display();
+    } else {
+        refreshWindow();
+    }
 }
 
 //Converts a vector from pixel coordinates to the corresponding
