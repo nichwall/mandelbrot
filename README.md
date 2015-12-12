@@ -9,6 +9,7 @@ make
   
   
 Controls Overview:  
+H - help menu  
 Q - quit  
 S - save image  
 R - reset view  
