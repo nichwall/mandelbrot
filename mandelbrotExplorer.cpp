@@ -65,6 +65,11 @@ int main() {
                 handleDrag(&brot, &event);
                 break;
 
+            //if the window is closed
+            case sf::Event::Closed:
+                brot.close();
+                break;
+
             default:
                 break;
         } //end event switch
