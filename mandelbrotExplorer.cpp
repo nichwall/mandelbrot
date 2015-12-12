@@ -177,6 +177,8 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
                         brot->close();
                         break;
                     }
+                } else if (event->type == sf::Event::Closed) {
+                    brot->close();
                 }
             }
             brot->enableOverlay(false);
