@@ -294,6 +294,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         rectangle.setPosition(0, 0);
 
         //draw to the screen
+        window->draw(sprite);
         window->draw(rectangle);
         window->draw(controls);
         window->draw(stats);
