@@ -38,8 +38,8 @@ MandelbrotViewer::MandelbrotViewer(int res) {
     initPalette(); 
 
     //initialize the font for the overlay
-	if (!font.loadFromFile("cour.ttf"));
-	else if (!font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
+	if (font.loadFromFile("cour.ttf"));
+	else if (font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
 	else std::cout << "ERROR: unable to load font\n";
 
     size_t size = resolution;
