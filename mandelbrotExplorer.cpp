@@ -89,7 +89,7 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
             break;
         //if up arrow, increase iterations
         case sf::Keyboard::Up:
-            iterations += 30;
+            iterations += 50;
             brot->setIterations(iterations);
             brot->generate();
             brot->updateMandelbrot();
@@ -97,7 +97,7 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
             break;
         //if down arrow, decrease iterations
         case sf::Keyboard::Down:
-            iterations -= 30;
+            iterations -= 50;
             if (iterations < 100) iterations = 100;
             brot->setIterations(iterations);
             brot->generate();
@@ -156,6 +156,7 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
             break;
         //if R, reset the mandelbrot to the starting image
         case sf::Keyboard::R:
+			iterations = 100;
             brot->resetMandelbrot();
             brot->resetView();
             brot->generate();

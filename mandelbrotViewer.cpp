@@ -38,8 +38,9 @@ MandelbrotViewer::MandelbrotViewer(int res) {
     initPalette(); 
 
     //initialize the font for the overlay
-    if (!font.loadFromFile("cour.ttf"))
-        std::cout << "ERROR: unable to load font\n";
+	if (!font.loadFromFile("cour.ttf"));
+	else if (!font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
+	else std::cout << "ERROR: unable to load font\n";
 
     size_t size = resolution;
     std::vector< std::vector<int> > array(size, std::vector<int>(size));
@@ -281,6 +282,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         ss << "   " << std::setw(23) << area.left + area.width << "     " << std::setw(23) << area.top + area.height;
         ss << std::defaultfloat;
         ss << "\n\nZoom factor: " << 2/area.width;
+		ss << "\n\nIterations: " << max_iter;
 
         stats.setFont(font);
         stats.setString(ss.str());
