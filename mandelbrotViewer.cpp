@@ -3,6 +3,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <thread>
 #include <ctime>
 
 //initialize a couple of global objects
@@ -42,9 +43,13 @@ MandelbrotViewer::MandelbrotViewer(int res) {
 	else if (font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
 	else std::cout << "ERROR: unable to load font\n";
 
+    //initialize the image_array
     size_t size = resolution;
     std::vector< std::vector<int> > array(size, std::vector<int>(size));
     image_array = array;
+
+    //get the number of supported concurrent threads
+    max_threads = std::thread::hardware_concurrency();
 }
 
 MandelbrotViewer::~MandelbrotViewer() { }
@@ -125,21 +130,18 @@ void MandelbrotViewer::generate() {
     //make sure it starts at line 0
     nextLine = 0;
 
-    sf::Thread thread1(&MandelbrotViewer::genLine, this);
-    sf::Thread thread2(&MandelbrotViewer::genLine, this);
-    sf::Thread thread3(&MandelbrotViewer::genLine, this);
-    sf::Thread thread4(&MandelbrotViewer::genLine, this);
+    //create the thread pool
+    std::vector<std::thread> threadPool;
+    for (int i=0; i<max_threads; i++) {
+        threadPool.push_back(std::thread(&MandelbrotViewer::genLine, this));
+    }
 
-    thread1.launch();
-    thread2.launch();
-    thread3.launch();
-    thread4.launch();
+    //join the threads
+    for (int i=0; i<max_threads; i++) {
+        threadPool[i].join();
+    }
 
-    thread1.wait();
-    thread2.wait();
-    thread3.wait();
-    thread4.wait();
-
+    //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
 }
 

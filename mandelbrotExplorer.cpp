@@ -1,5 +1,6 @@
 #include "mandelbrotViewer.h"
 #include <iostream>
+#include <thread>
 
 //global stuff
 int iterations = 100;
@@ -223,14 +224,13 @@ void handleZoom(MandelbrotViewer *brot, sf::Event *event){
 
     //start zooming with a worker thread, so that it can generate
     //the new image while it's zooming
-    sf::Thread thread(&zoom);
-    thread.launch();
+    std::thread thread(&zoom);
 
     //start generating while it's zooming
     brot->generate();
 
     //wait for the thread to finish (wait for the zoom to finish)
-    thread.wait();
+    thread.join();
 
     //now reactivate the window
     brot->setWindowActive(true);

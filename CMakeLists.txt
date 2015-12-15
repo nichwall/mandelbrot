@@ -13,6 +13,7 @@ set (EXTRA_LIBS ${EXTRA_LIBS}
     sfml-system
     sfml-window
     sfml-graphics
+    pthread
 )
 
 add_executable (MandelExplorer
