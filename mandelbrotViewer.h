@@ -101,6 +101,9 @@ class MandelbrotViewer {
         //mandelbrot, then moves onto the next, until the entire mandelbrot is generated
         void genLine();
 
+        //Holds the maximum number of concurrent threads suppported by the current CPU
+        unsigned int max_threads;
+
         //This looks up a color to print according to the escape value given
         sf::Color findColor(int iter);
 
