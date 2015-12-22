@@ -2,9 +2,7 @@
 #include <iostream>
 #include <thread>
 
-//global stuff
-int iterations = 100;
-int resolution;
+# define PI 3.14159265358979323846
 
 //this struct holds the parameters for the zoom function,
 //since it needs to be threaded and thus cannot accept arguments
@@ -23,13 +21,13 @@ double interpolate(double min, double max, int range) { return (max-min)/range; 
 void handleKeyboard(MandelbrotViewer *brot, sf::Event *event);
 void handleZoom(MandelbrotViewer *brot, sf::Event *event);
 void handleDrag(MandelbrotViewer *brot, sf::Event *event);
+double handleRotate();
 void zoom();
 
 int main() {
-    resolution = 820;
     
     //create the mandelbrotviewer instance
-    MandelbrotViewer brot(resolution);
+    MandelbrotViewer brot(820);
 
     //initialize the image
     brot.resetMandelbrot();
@@ -66,6 +64,11 @@ int main() {
                 handleDrag(&brot, &event);
                 break;
 
+            //if the window regains focus, refresh it
+            case sf::Event::GainedFocus:
+                brot.refreshWindow();
+                break;
+
             //if the window is closed
             case sf::Event::Closed:
                 brot.close();
@@ -90,17 +93,15 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
             break;
         //if up arrow, increase iterations
         case sf::Keyboard::Up:
-            iterations += 50;
-            brot->setIterations(iterations);
+            brot->setIterations(brot->getIters() + 50);
             brot->generate();
             brot->updateMandelbrot();
             brot->refreshWindow();
             break;
         //if down arrow, decrease iterations
         case sf::Keyboard::Down:
-            iterations -= 50;
-            if (iterations < 100) iterations = 100;
-            brot->setIterations(iterations);
+            if (brot->getIters() > 100)
+                brot->setIterations(brot->getIters() - 50);
             brot->generate();
             brot->updateMandelbrot();
             brot->refreshWindow();
@@ -157,7 +158,6 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
             break;
         //if R, reset the mandelbrot to the starting image
         case sf::Keyboard::R:
-			iterations = 100;
             brot->resetMandelbrot();
             brot->resetView();
             brot->generate();
@@ -184,6 +184,18 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
                 }
             }
             brot->enableOverlay(false);
+            break;
+        //if PageUp, rotate ccw
+        case sf::Keyboard::PageUp:
+            brot->setRotation(brot->getRotation() + handleRotate());
+            break;
+        //if PageDown, rotate clockwise
+        case sf::Keyboard::PageDown:
+            brot->setRotation(brot->getRotation() + handleRotate());
+            break;
+        //if Home, set the rotation to default
+        case sf::Keyboard::Home:
+            brot->setRotation(0);
             break;
         //end the keypress switch
         default:
@@ -309,7 +321,7 @@ void handleDrag(MandelbrotViewer *brot, sf::Event *event) {
     difference.y = new_position.y - old_position.y;
 
     //set the old center
-    old_center = sf::Vector2f(resolution/2, resolution/2);
+    old_center = sf::Vector2f(brot->getResolution()/2.0, brot->getResolution()/2.0);
 
     //calculate the new center
     new_center = old_center - difference;
@@ -337,4 +349,36 @@ void zoom() {
         param.viewer->refreshWindow();
     }
     param.viewer->setWindowActive(false);
+}
+
+//rotates the view until the key is released, then returns the new rotation
+double handleRotate() {
+    float rotate_inc = 1.0;
+    //float rotation = param.viewer->getRotation() * 180 / PI;
+    float rotation = 0;
+    int framerate = param.viewer->getFramerate();
+
+    //set the framerate high so that it will rotate in real time
+    param.viewer->setFramerate(500);
+
+    //if page up, rotate ccw
+    while (sf::Keyboard::isKeyPressed(sf::Keyboard::PageUp)) {
+        param.viewer->rotateView(rotation);
+        param.viewer->refreshWindow();
+        rotation += rotate_inc;
+        if (rotation >= 360) rotation -= 360;
+    }
+
+    //if page down, rotate cw
+    while (sf::Keyboard::isKeyPressed(sf::Keyboard::PageDown)) {
+        param.viewer->rotateView(rotation);
+        param.viewer->refreshWindow();
+        rotation -= rotate_inc;
+        if (rotation < 0) rotation += 360;
+    }
+
+    param.viewer->setFramerate(framerate);
+
+    //return the rotation in radians
+    return rotation * PI / 180;
 }
