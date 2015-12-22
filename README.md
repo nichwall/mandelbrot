@@ -18,6 +18,6 @@ Up/Down arrows - increase/decrease iterations
 Left/Right arrows - change the colors  
 Numbers 1-7 (keyboard, not number pad) - change color scheme  
 Click and Drag - ...click and drag  
-Page Up - rotate counter clockwise
-Page Down - rotate clockwise
-Home - reset rotation
+Page Up - rotate counter clockwise  
+Page Down - rotate clockwise  
+Home - reset rotation  
