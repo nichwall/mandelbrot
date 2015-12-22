@@ -2,9 +2,12 @@
 #include <string.h>
 #include <iostream>
 #include <iomanip>
+#include <math.h>
 #include <sstream>
 #include <thread>
 #include <ctime>
+
+# define PI 3.14159265358979323846
 
 //initialize a couple of global objects
 sf::Mutex mutex1;
@@ -50,6 +53,10 @@ MandelbrotViewer::MandelbrotViewer(int res) {
 
     //get the number of supported concurrent threads
     max_threads = std::thread::hardware_concurrency();
+
+    //disable repeated keys
+    window->setKeyRepeatEnabled(false);
+    rotation = 0;
 }
 
 MandelbrotViewer::~MandelbrotViewer() { }
@@ -87,6 +94,17 @@ void MandelbrotViewer::setColorScheme(int newScheme) {
     refreshWindow();
 }
 
+//sets the rotation and regenerates the mandelbrot
+void MandelbrotViewer::setRotation(double radians) {
+    rotation = radians;
+    if (rotation >= 2 * PI) rotation -= 2 * PI;
+    else if (rotation < 0) rotation += 2 * PI;
+    generate();
+    resetView();
+    updateMandelbrot();
+    refreshWindow();
+}
+
 //Functions to change parameters of mandelbrot
 
 //regenerates the image with the new color multiplier, without regenerating
@@ -102,6 +120,10 @@ void MandelbrotViewer::changeColor() {
 //changes the parameters of the mandelbrot: sets new center and zooms accordingly
 //does not regenerate or update the image
 void MandelbrotViewer::changePos(sf::Vector2<double> new_center, double zoom_factor) {
+
+    //rotate the mouse input first
+    new_center = rotate(new_center);
+
     area.width = area.width * zoom_factor;
     area.height = area.height * zoom_factor;
     area.left = new_center.x - area.width / 2.0;
@@ -122,7 +144,6 @@ void MandelbrotViewer::changePosView(sf::Vector2f new_center, double zoom_factor
     //reload the new view
     window->setView(*view);
 }
-
 
 //generate the mandelbrot
 void MandelbrotViewer::generate() {
@@ -150,7 +171,7 @@ void MandelbrotViewer::generate() {
 void MandelbrotViewer::genLine() {
 
     int iter, row, column;
-    double x, y;
+    sf::Vector2<double> point;
     double x_inc = interpolate(area.width, resolution);
     double y_inc = interpolate(area.height, resolution);
     sf::Color color;
@@ -168,7 +189,7 @@ void MandelbrotViewer::genLine() {
         if (row >= resolution) return;
 
         //calculate the row height in the complex plane
-        y = area.top + row * y_inc;
+        point.y = area.top + row * y_inc;
 
         //now loop through and generate all the pixels in that row
         for (column = 0; column < resolution; column++) {
@@ -182,8 +203,8 @@ void MandelbrotViewer::genLine() {
             } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
             else {
                 //calculate the next x coordinate of the complex plane
-                x = area.left + column * x_inc;
-                iter = escape(x, y);
+                point.x = area.left + column * x_inc;
+                iter = escape(point);
             }
 
             //mutex this too so that the image is not accessed multiple times simultaneously
@@ -206,6 +227,7 @@ void MandelbrotViewer::resetMandelbrot() {
     max_iter = 100;
     last_max_iter = 100;
     color_multiple = 1;
+    rotation = 0;
 }
 
 //refreshes the window: clear, draw, display
@@ -253,12 +275,14 @@ void MandelbrotViewer::saveImage() {
 
 //enables an overlay that dims the screen and displays controls/stats/etc.
 void MandelbrotViewer::enableOverlay(bool enable) {
+    double angle = rotation * 180 / PI;
+    if (angle > 180) angle -= 360;
     sf::Text controls;
     sf::Text stats;
     if (enable) {
         //set up the controls part
         controls.setFont(font);
-        controls.setString("Help Menu (H)\n\n\n"
+        controls.setString("                 Help Menu (H)\n"
                         "Controls\n"
                         "------------------------------------------------\n"
                         "Left/Right arrows - Change colors\n"
@@ -270,10 +294,13 @@ void MandelbrotViewer::enableOverlay(bool enable) {
                         "S                 - Save image\n"
                         "R                 - Reset\n"
                         "Q                 - Quit\n"
+                        "Page up           - Rotate counter-clockwise\n"
+                        "Page down         - Rotate clockwise\n"
+                        "Home              - Reset rotation\n"
                         "------------------------------------------------\n");
         controls.setCharacterSize(24);
         controls.setColor(sf::Color::White);
-        controls.setPosition(40, 50);
+        controls.setPosition(40, 30);
 
         //set up the stats part
         std::stringstream ss;
@@ -283,13 +310,15 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         ss << "x: " << std::setw(23) << area.left << "  y: " << std::setw(23) << area.top << "\n";
         ss << "   " << std::setw(23) << area.left + area.width << "     " << std::setw(23) << area.top + area.height;
         ss << std::defaultfloat;
-        ss << "\n\nZoom factor: " << 2/area.width;
-		ss << "\n\nIterations: " << max_iter;
+        int zoom_level = log2(2.0/area.width);
+        ss << "\n\nZoom level: " << zoom_level;
+		ss << "\n\nIterations: " << max_iter << std::fixed << std::setprecision(0);
+        ss << "\n\nRotation: " << angle << " degrees";
 
         stats.setFont(font);
         stats.setString(ss.str());
         stats.setCharacterSize(24);
-        stats.setPosition(40, 474);
+        stats.setPosition(40, 475);
 
         //set up the screen fade
         sf::RectangleShape rectangle;
@@ -308,6 +337,11 @@ void MandelbrotViewer::enableOverlay(bool enable) {
     }
 }
 
+//rotates the view relative to its current rotation
+void MandelbrotViewer::rotateView(float angle) {
+    view->setRotation(angle);
+}
+
 //Converts a vector from pixel coordinates to the corresponding
 //coordinates on the complex plane
 sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
@@ -320,7 +354,11 @@ sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
 //this function calculates the escape-time of the given coordinate
 //it is the brain of the mandelbrot program: it does the work to
 //make the pretty pictures :)
-int MandelbrotViewer::escape(double x0, double y0) {
+int MandelbrotViewer::escape(sf::Vector2<double> point) {
+    
+    //rotate the point first
+    point = rotate(point);
+
     double x = 0, y = 0, x_check = 0, y_check = 0;
     int iter = 0, period = 2;
 
@@ -338,8 +376,8 @@ int MandelbrotViewer::escape(double x0, double y0) {
         for (; iter < period; iter++) {
             y = x * y;
             y += y; //multiply by two
-            y += y0;
-            x = x_square - y_square + x0;
+            y += point.y;
+            x = x_square - y_square + point.x;
 
             x_square = x*x;
             y_square = y*y;
@@ -368,6 +406,43 @@ sf::Color MandelbrotViewer::findColor(int iter) {
         color.b = palette[2][i];
     }
     return color;
+}
+
+//this function handles rotation - it takes in a complex point with zero rotation
+//and returns where that point is when rotated
+sf::Vector2<double> MandelbrotViewer::rotate(sf::Vector2<double> rect) {
+
+    //get some vectors ready
+    sf::Vector2<double> polar;
+    sf::Vector2<double> difference;
+    sf::Vector2<double> center;
+
+    //the function needs to use the given rectangular coordinates to generate a new vector
+    //with the origin at the current center of the complex plane, convert that vector to
+    //polar coordinates, convert it back to rectangular coordinates, and re-normalize it.
+
+    //get the center of the complex plane in the viewer
+    center.x = area.left + area.width/2.0;
+    center.y = area.top + area.height/2.0;
+
+    //subract the given point from the center, to get a vector with the center as the origin
+    difference = rect - center;
+
+    //convert that new vector to polar coordinates
+    polar.x = hypot(difference.x, difference.y);
+    polar.y = atan2(difference.y, difference.x);
+
+    //rotate the polar vector
+    polar.y += rotation;
+
+    //convert back to rectangular
+    difference.x = polar.x * cos(polar.y);
+    difference.y = polar.x * sin(polar.y);
+
+    //now put the center back where it belongs
+    rect = center + difference;
+
+    return rect;
 }
 
 //This is for initPalette, it makes sure the given number is between 0 and 255
