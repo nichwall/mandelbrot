@@ -10,6 +10,17 @@ struct Color {
     int b;
 };
 
+struct Complex {
+    double r;
+    double i;
+
+    Complex operator=(const Complex &a) {
+        r = a.r;
+        i = a.i;
+        return *this;
+    }
+};
+
 class MandelbrotViewer {
     public:
         //This constructor creates a new viewer with specified resolution
@@ -24,16 +35,18 @@ class MandelbrotViewer {
         double getColorMultiple() {return color_multiple;}
         sf::Vector2i getMousePosition();
         sf::Vector2f getViewCenter() {return view->getCenter();}
-        sf::Vector2f getMandelbrotCenter();
+        sf::Vector2<double> getMandelbrotCenter();
         bool getEvent(sf::Event&);
+        bool getPert() {return pert;}
         bool isOpen();
         
         //Setter functions:
-        void setIterations(int iter) {last_max_iter = max_iter; max_iter = iter;}
+        void setIterations(int iter);
         void setColorMultiple(double mult) {color_multiple = mult;}
         void setFramerate(int rate) {framerateLimit = rate;}
         void setColorScheme(int newScheme);
         void setRotation(double radians);
+        void setPert(bool urbation) {pert = urbation;}
         
         //Functions to change parameters for mandelbrot generation:
         void changeColor();
@@ -64,6 +77,7 @@ class MandelbrotViewer {
         int resolution;
         int framerateLimit;
         int nextLine;
+        bool pert;
 
         //These are pointers to each instance's window and view
         //since we can't initialize them yet
@@ -93,10 +107,16 @@ class MandelbrotViewer {
         //this array stores the number of iterations for each pixel
         std::vector< std::vector<int> > image_array;
 
+        //this stores the perturbation theory coefficients found with calcCoefficients, as
+        //well as the escape values for each n. So the rows of the two-dimensional array
+        //are <z, a, b, c>
+        std::vector< std::vector<Complex> > coeff;
+
         //maximum number of iterations to check for. Higher values are slower,
-        //but more precise
+        //but give an image with more detail
         int max_iter;
         int last_max_iter;
+
 
         //Functions:
         
@@ -106,6 +126,12 @@ class MandelbrotViewer {
 
         //escape calculates the escape-time of given point of the mandelbrot
         int escape(sf::Vector2<double> point);
+        int findEscape(Complex delta);
+        Complex newDelta(Complex delta, int n);
+
+        //calcCoefficients calculates the first three coefficients of the perturbation
+        //theory equation at the given point for each n. Saves in <coefficients>
+        void calcCoefficients(sf::Vector2<double>);
 
         //genLine is a function for worker threads: it generates the next line of the
         //mandelbrot, then moves onto the next, until the entire mandelbrot is generated
@@ -118,7 +144,7 @@ class MandelbrotViewer {
         //and returns where that point is when rotated
         sf::Vector2<double> rotate(sf::Vector2<double>);
 
-        //initialize the color palette. Having a palette helps avoid regenerating the
+        //initialize the color palette. Having a palette avoids regenerating the
         //color scheme each time it is needed
         int palette[3][256];
         void initPalette();

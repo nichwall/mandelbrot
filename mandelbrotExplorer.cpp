@@ -87,6 +87,12 @@ int main() {
 void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
     float color_inc = interpolate(0, 1, 30);
     switch(event->key.code) {
+        //if P, switch to perturbation calculations
+        case sf::Keyboard::P:
+            if (brot->getPert()) brot->setPert(false);
+            else brot->setPert(true);
+            brot->setRotation(0);
+            break;
         //if Q, quit and close the window
         case sf::Keyboard::Q:
             brot->close();
@@ -354,7 +360,6 @@ void zoom() {
 //rotates the view until the key is released, then returns the new rotation
 double handleRotate() {
     float rotate_inc = 1.0;
-    //float rotation = param.viewer->getRotation() * 180 / PI;
     float rotation = 0;
     int framerate = param.viewer->getFramerate();
 

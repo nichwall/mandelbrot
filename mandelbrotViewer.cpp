@@ -9,13 +9,54 @@
 
 # define PI 3.14159265358979323846
 
+void print(Complex c) {
+    std::cout << "r: " << c.r << "\ti: " << c.i << "\n";
+}
+
 //initialize a couple of global objects
 sf::Mutex mutex1;
 sf::Mutex mutex2;
 
+//operator overloads for Complex variables
+Complex operator*(Complex a, Complex b) {
+    Complex c;
+    c.r = a.r * b.r - a.i * b.i;
+    c.i = a.r * b.i + a.i * b.r;
+    return c;
+}
+
+Complex operator*(double a, Complex b) {
+    Complex c;
+    c.r = a * b.r;
+    c.i = a * b.i;
+    return c;
+}
+
+Complex operator+(Complex a, Complex b) {
+    Complex c;
+    c.r = a.r + b.r;
+    c.i = a.i + b.i;
+    return c;
+}
+
+Complex operator+(Complex b, double a) {
+    Complex c;
+    c.r = a + b.r;
+    c.i = b.i;
+    return c;
+}
+
+Complex operator-(Complex a, Complex b) {
+    Complex c;
+    c.r = a.r - b.r;
+    c.i = a.i - b.i;
+    return c;
+}
+
 //Constructor
 MandelbrotViewer::MandelbrotViewer(int res) {
     resolution = res;
+    pert = false;
 
     //create the window and view, then give them to the pointers
     static sf::RenderWindow win(sf::VideoMode(resolution, resolution), "Mandelbrot Explorer");
@@ -46,10 +87,14 @@ MandelbrotViewer::MandelbrotViewer(int res) {
 	else if (font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
 	else std::cout << "ERROR: unable to load font\n";
 
-    //initialize the image_array
+    //initialize the image_array (resolution x resolution)
     size_t size = resolution;
     std::vector< std::vector<int> > array(size, std::vector<int>(size));
     image_array = array;
+
+    //initialize the coefficient array (4 x resolution)
+    std::vector< std::vector<Complex> > coefficients(4, std::vector<Complex>(size));
+    coeff = coefficients;
 
     //get the number of supported concurrent threads
     max_threads = std::thread::hardware_concurrency();
@@ -67,8 +112,8 @@ sf::Vector2i MandelbrotViewer::getMousePosition() {
 }
 
 //return the center of the area of the complex plane
-sf::Vector2f MandelbrotViewer::getMandelbrotCenter() {
-    sf::Vector2f center;
+sf::Vector2<double> MandelbrotViewer::getMandelbrotCenter() {
+    sf::Vector2<double> center;
     center.x = area.left + area.width/2.0;
     center.y = area.top + area.height/2.0;
     return center;
@@ -82,6 +127,14 @@ bool MandelbrotViewer::getEvent(sf::Event& event) {
 //checks if the window is open
 bool MandelbrotViewer::isOpen() {
     return window->isOpen();
+}
+
+//set the number of iterations checked to generate the mandelbrot.
+//also resize the coefficients array
+void MandelbrotViewer::setIterations(int iter) {
+    last_max_iter = max_iter;
+    max_iter = iter;
+    coeff.resize(max_iter);
 }
 
 //this is a setter function to change the color scheme
@@ -150,6 +203,13 @@ void MandelbrotViewer::generate() {
 
     //make sure it starts at line 0
     nextLine = 0;
+    std::cout << pert << "\n";
+
+    sf::Vector2<double> center;
+    center.x = area.left + area.width/2.0;
+    center.y = area.top + area.height/2.0;
+    escape(center);
+    calcCoefficients(center);
 
     //create the thread pool
     std::vector<std::thread> threadPool;
@@ -170,48 +230,101 @@ void MandelbrotViewer::generate() {
 //row of pixels, generates it, then starts the next one
 void MandelbrotViewer::genLine() {
 
-    int iter, row, column;
-    sf::Vector2<double> point;
-    double x_inc = interpolate(area.width, resolution);
-    double y_inc = interpolate(area.height, resolution);
-    sf::Color color;
+    if (!pert) {
+        int iter, row, column;
+        sf::Vector2<double> point;
+        double x_inc = interpolate(area.width, resolution);
+        double y_inc = interpolate(area.height, resolution);
+        sf::Color color;
 
-    while(true) {
+        while(true) {
 
-        //the mutex avoids multiple threads writing to variables at the same time,
-        //which can corrupt the data
-        mutex1.lock();
-        row = nextLine++; //get the next ungenerated line
-        mutex1.unlock();
+            //the mutex avoids multiple threads writing to variables at the same time,
+            //which can corrupt the data
+            mutex1.lock();
+            row = nextLine++; //get the next ungenerated line
+            mutex1.unlock();
 
-        //if all the rows have been generated, stop it from generating outside the bounds
-        //of the image
-        if (row >= resolution) return;
+            //if all the rows have been generated, stop it from generating outside the bounds
+            //of the image
+            if (row >= resolution) return;
 
-        //calculate the row height in the complex plane
-        point.y = area.top + row * y_inc;
+            //calculate the row height in the complex plane
+            point.y = area.top + row * y_inc;
 
-        //now loop through and generate all the pixels in that row
-        for (column = 0; column < resolution; column++) {
+            //now loop through and generate all the pixels in that row
+            for (column = 0; column < resolution; column++) {
 
-            // Check if we increased iterations and if the pixel already diverged
-            if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
-                iter = image_array[row][column];
-            } // Check if we decreased iterations and if the pixel already converged
-            else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
-                iter = image_array[row][column];
-            } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
-            else {
-                //calculate the next x coordinate of the complex plane
-                point.x = area.left + column * x_inc;
-                iter = escape(point);
+                //check if we increased iterations and if the pixel already diverged
+                if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
+                    iter = image_array[row][column];
+                } //check if we decreased iterations and if the pixel already converged
+                else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
+                    iter = image_array[row][column];
+                } //check if we zoomed, or didn't change iterations which means
+                  //we need to recalculate the whole thing
+                else {
+                    //calculate the next x coordinate of the complex plane
+                    point.x = area.left + column * x_inc;
+                    iter = escape(point);
+                }
+
+                //mutex this too so that the image is not accessed multiple times simultaneously
+                mutex2.lock();
+                image.setPixel(column, row, findColor(iter));
+                image_array[row][column] = iter;
+                mutex2.unlock();
             }
+        }
+    } else if (pert) {
 
-            //mutex this too so that the image is not accessed multiple times simultaneously
-            mutex2.lock();
-            image.setPixel(column, row, findColor(iter));
-            image_array[row][column] = iter;
-            mutex2.unlock();
+        Complex delta;
+        Complex point;
+        int iter, row, column;
+        double x_inc = interpolate(area.width, resolution);
+        double y_inc = interpolate(area.height, resolution);
+        sf::Color color;
+
+        while(true) {
+
+            //the mutex avoids multiple threads writing to variables at the same time,
+            //which can corrupt the data
+            mutex1.lock();
+            row = nextLine++; //get the next ungenerated line
+            mutex1.unlock();
+
+            //if all the rows have been generated, stop it from generating outside the bounds
+            //of the image
+            if (row >= resolution) return;
+
+            //calculate the row (imaginary) height in the complex plane
+            point.i = area.top + row * y_inc;
+
+            //now loop through and generate all the pixels in that row
+            for (column = 0; column < resolution; column++) {
+
+                //check if we increased iterations and if the pixel already diverged
+                if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
+                    iter = image_array[row][column];
+                } //check if we decreased iterations and if the pixel already converged
+                else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
+                    iter = image_array[row][column];
+                } //check if we zoomed, or didn't change iterations which means
+                  //we need to recalculate the whole thing
+                else {
+                    //calculate the next real coordinate of the complex plane
+                    point.r = area.left + column * x_inc;
+                    delta = point - coeff[0][0];
+                    
+                    iter = findEscape(delta);
+                }
+
+                //mutex this too so that the image is not accessed multiple times simultaneously
+                mutex2.lock();
+                image.setPixel(column, row, findColor(iter));
+                image_array[row][column] = iter;
+                mutex2.unlock();
+            }
         }
     }
 }
@@ -357,42 +470,90 @@ sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
 int MandelbrotViewer::escape(sf::Vector2<double> point) {
     
     //rotate the point first
-    point = rotate(point);
+    if (rotation) point = rotate(point);
 
-    double x = 0, y = 0, x_check = 0, y_check = 0;
-    int iter = 0, period = 2;
+    double x = 0, y = 0;
+    int escape = 0;
 
     double x_square = 0;
     double y_square = 0;
+    bool escaped = false;
+    Complex spot;
 
-    //this is a specialized version of z = z^2 + c. It only does three multiplications,
-    //instead of the normal six. Multplications are very costly with such high precision
-    while(period < max_iter) {
-        x_check = x;
-        y_check = y;
-        period += period;
+    for (int iter=0; iter < max_iter; iter++) {
 
-        if (period > max_iter) period = max_iter;
-        for (; iter < period; iter++) {
-            y = x * y;
-            y += y; //multiply by two
-            y += point.y;
-            x = x_square - y_square + point.x;
+        y = x * y;
+        y += y; //multiply by two
+        y += point.y;
+        x = x_square - y_square + point.x;
 
-            x_square = x*x;
-            y_square = y*y;
+        spot.r = x;
+        spot.i = y;
+        coeff[0][iter] = spot; //save the x and y values at each iteration
 
-            //if the magnitued is greater than 2, it will escape
-            if (x_square + y_square > 4.0) return iter;
+        x_square = x*x; //save the square values because they'll be used
+        y_square = y*y; //again to calculate the next x
 
-            //another optimization: it checks if the new 'z' is a repeat. If so,
-            //it knows that it is in a loop and will not escape
-            if ((x == x_check) && (y == y_check)){
-                return max_iter;
-            }
+        //if the magnitude is greater than 2, it will escape
+        if (x_square + y_square > 4.0 && !escaped) {
+            escape = iter;
+            escaped = true;
         }
     }
+    if (!escaped) return max_iter;
+    return escape;
+}
+
+//return magnitude^2 of a complex number
+double mag2(Complex num) {
+    return num.r * num.r + num.i * num.i;
+}
+
+//return delta_n with the given delta_0
+Complex MandelbrotViewer::newDelta(Complex d0, int n) {
+    Complex d_square = d0 * d0;
+    Complex d_cube = d0 * d_square;
+    return coeff[1][n] * d0 + coeff[2][n] * d_square + coeff[3][n] * d_cube;
+}
+
+//use a binary search to locate the escape iteration, using the given delta and the coeff vector
+int MandelbrotViewer::findEscape(Complex delta) {
+    Complex d0 = delta;
+    for (int n=0; n<max_iter; n++) {
+        if (mag2(coeff[0][n] + delta) > 4) return n;
+        delta = 2 * coeff[0][n] * delta + delta * delta + d0;
+//      delta = newDelta(delta, n);
+//      if (mag2(coeff[0][n] + delta) < 0.000001 * mag2(coeff[0][n])) {
+//          return n;
+//      }
+    }
     return max_iter;
+}
+
+//calculate the coefficients a, b, and c needed for the perturbation theory calculation
+//of the mandelbrot image, ands save them to the coeff vector
+void MandelbrotViewer::calcCoefficients(sf::Vector2<double>) {
+
+    Complex zero;
+    zero.r = 0;
+    zero.i = 0;
+    Complex a = zero,
+            b = zero,
+            c = zero;
+    a.r = 1;
+
+    coeff[1][0] = a;
+    coeff[2][0] = b;
+    coeff[3][0] = c;
+
+    for (int n=0; n<max_iter-1; n++) {
+        a = 2 * coeff[0][n] * coeff[1][n] + 1;
+        b = 2 * coeff[0][n] * coeff[2][n] + coeff[1][n] * coeff[1][n];
+        c = 2 * coeff[0][n] * coeff[3][n] + 2 * coeff[1][n] * coeff[2][n];
+        coeff[1][n+1] = a;
+        coeff[2][n+1] = b;
+        coeff[3][n+1] = c;
+    }
 }
 
 //findColor uses the number of iterations passed to it to look up a color in the palette
