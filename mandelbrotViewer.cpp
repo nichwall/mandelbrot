@@ -14,16 +14,17 @@ sf::Mutex mutex1;
 sf::Mutex mutex2;
 
 //Constructor
-MandelbrotViewer::MandelbrotViewer(int res) {
-    resolution = res;
+MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
+    res_width = resX;
+    res_height = resY;
 
     //create the window and view, then give them to the pointers
-    static sf::RenderWindow win(sf::VideoMode(resolution, resolution), "Mandelbrot Explorer");
-    static sf::View vw(sf::FloatRect(0, 0, resolution, resolution));
+    static sf::RenderWindow win(sf::VideoMode(res_width, res_height), "Mandelbrot Explorer");
+    static sf::View vw(sf::FloatRect(0, 0, res_width, res_height));
     window = &win;
     view = &vw;
 
-    //initialize the viewport
+    //initialize the viewport. It should never change
     view->setViewport(sf::FloatRect(0, 0, 1, 1));
     window->setView(*view);
     
@@ -35,8 +36,8 @@ MandelbrotViewer::MandelbrotViewer(int res) {
     resetMandelbrot();
 
     //initialize the image
-    texture.create(resolution, resolution);
-    image.create(resolution, resolution, sf::Color::Black);
+    texture.create(res_width, res_height);
+    image.create(res_width, res_height, sf::Color::Black);
     sprite.setTexture(texture);
     scheme = 1;
     initPalette(); 
@@ -47,8 +48,9 @@ MandelbrotViewer::MandelbrotViewer(int res) {
 	else std::cout << "ERROR: unable to load font\n";
 
     //initialize the image_array
-    size_t size = resolution;
-    std::vector< std::vector<int> > array(size, std::vector<int>(size));
+    size_t sizeX = res_width;
+    size_t sizeY = res_height;
+    std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
     image_array = array;
 
     //get the number of supported concurrent threads
@@ -110,8 +112,8 @@ void MandelbrotViewer::setRotation(double radians) {
 //regenerates the image with the new color multiplier, without regenerating
 //the mandelbrot. Does not update the image (use updateImage())
 void MandelbrotViewer::changeColor() {
-    for (int i=0; i<resolution; i++) {
-        for (int j=0; j<resolution; j++) {
+    for (int i=0; i<res_height; i++) {
+        for (int j=0; j<res_width; j++) {
             image.setPixel(j, i, findColor(image_array[i][j]));
         }
     }
@@ -140,9 +142,38 @@ void MandelbrotViewer::changePosView(sf::Vector2f new_center, double zoom_factor
     //set new center and zoom
     view->setCenter(new_center);
     view->zoom(zoom_factor);
+}
 
-    //reload the new view
-    window->setView(*view);
+//handle resize events by modifying the area rectangle accordingly
+void MandelbrotViewer::resizeWindow(int new_x, int new_y) {
+
+    //save the old center and resolution
+    double center_x = area.left + area.width/2.0;
+    double center_y = area.top + area.height/2.0;
+    double inc = area.width/res_width;
+
+    res_width = new_x;
+    res_height = new_y;
+
+    //calculate the new area
+    area.width = inc * res_width;
+    area.height = inc * res_height;
+    area.left = center_x - area.width/2.0;
+    area.top = center_y - area.height/2.0;
+
+    //resize the image, texture, and sprite
+    image.create(res_width, res_height, sf::Color::Black);
+    texture.create(res_width, res_height);
+    sprite.setTextureRect(sf::IntRect(0, 0, res_width, res_height));
+    sprite.setTexture(texture);
+
+    //resize the image_array
+    size_t sizeX = res_width;
+    size_t sizeY = res_height;
+    std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
+    image_array = array;
+
+    resetView();
 }
 
 //generate the mandelbrot
@@ -172,8 +203,8 @@ void MandelbrotViewer::genLine() {
 
     int iter, row, column;
     sf::Vector2<double> point;
-    double x_inc = interpolate(area.width, resolution);
-    double y_inc = interpolate(area.height, resolution);
+    double x_inc = interpolate(area.width, res_width);
+    double y_inc = interpolate(area.height, res_height);
     sf::Color color;
 
     while(true) {
@@ -186,13 +217,13 @@ void MandelbrotViewer::genLine() {
 
         //if all the rows have been generated, stop it from generating outside the bounds
         //of the image
-        if (row >= resolution) return;
+        if (row >= res_height) return;
 
         //calculate the row height in the complex plane
         point.y = area.top + row * y_inc;
 
         //now loop through and generate all the pixels in that row
-        for (column = 0; column < resolution; column++) {
+        for (column = 0; column < res_width; column++) {
 
             // Check if we increased iterations and if the pixel already diverged
             if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
@@ -200,7 +231,7 @@ void MandelbrotViewer::genLine() {
             } // Check if we decreased iterations and if the pixel already converged
             else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
                 iter = image_array[row][column];
-            } // Check if we zoomed, or didn't change iterations which means we need to recalculate the whole thing
+            } // Check if we zoomed or didn't change iterations
             else {
                 //calculate the next x coordinate of the complex plane
                 point.x = area.left + column * x_inc;
@@ -220,10 +251,12 @@ void MandelbrotViewer::genLine() {
 
 //resets the mandelbrot to generate the starting area
 void MandelbrotViewer::resetMandelbrot() {
-    area.left = -1.5;
-    area.top = -1.0;
-    area.width = 2;
+    area.top = -1;
     area.height = 2;
+    double inc = area.height/res_height;
+    area.width = inc * res_width;
+    area.left = -0.5 - area.width/2.0;
+
     max_iter = 100;
     last_max_iter = 100;
     color_multiple = 1;
@@ -240,8 +273,7 @@ void MandelbrotViewer::refreshWindow() {
 
 //reset the view to display the entire image
 void MandelbrotViewer::resetView() {
-    view->reset(sf::FloatRect(0, 0, resolution, resolution));
-    window->setView(*view);
+    view->reset(sf::FloatRect(0, 0, res_width, res_height));
 }
 
 //close the window
@@ -305,7 +337,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         //set up the stats part
         std::stringstream ss;
         ss << std::fixed << std::setprecision(20);
-        ss << "Resolution: " << resolution << "x" << resolution << "\n\n";
+        ss << "Resolution: " << res_width << "x" << res_height << "\n\n";
         ss << "Coordinates: \n";
         ss << "x: " << std::setw(23) << area.left << "  y: " << std::setw(23) << area.top << "\n";
         ss << "   " << std::setw(23) << area.left + area.width << "     " << std::setw(23) << area.top + area.height;
@@ -322,7 +354,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
 
         //set up the screen fade
         sf::RectangleShape rectangle;
-        rectangle.setSize(sf::Vector2f(resolution, resolution));
+        rectangle.setSize(sf::Vector2f(res_width, res_height));
         rectangle.setFillColor(sf::Color(0, 0, 0, 192));
         rectangle.setPosition(0, 0);
 
@@ -346,8 +378,8 @@ void MandelbrotViewer::rotateView(float angle) {
 //coordinates on the complex plane
 sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
     sf::Vector2<double> comp;
-    comp.x = area.left + pix.x * interpolate(area.width, resolution);
-    comp.y = area.top + pix.y * interpolate(area.height, resolution);
+    comp.x = area.left + pix.x * interpolate(area.width, res_width);
+    comp.y = area.top + pix.y * interpolate(area.height, res_height);
     return comp;
 }
 

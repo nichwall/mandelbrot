@@ -13,11 +13,12 @@ struct Color {
 class MandelbrotViewer {
     public:
         //This constructor creates a new viewer with specified resolution
-        MandelbrotViewer(int resolution);
+        MandelbrotViewer(int res_x, int res_y);
         ~MandelbrotViewer();
 
         //Accesor functions:
-        int getResolution() {return resolution;}
+        int getResWidth() {return res_width;}
+        int getResHeight() {return res_height;}
         int getFramerate() {return framerateLimit;}
         int getIters() {return max_iter;}
         double getRotation() {return rotation;}
@@ -39,6 +40,7 @@ class MandelbrotViewer {
         void changeColor();
         void changePos(sf::Vector2<double> new_center, double zoom_factor);
         void changePosView(sf::Vector2f new_center, double zoom_factor);
+        void resizeWindow(int newX, int newY);
 
         //Functions to generate the mandelbrot:
         void generate();
@@ -61,7 +63,8 @@ class MandelbrotViewer {
         sf::Vector2<double> pixelToComplex(sf::Vector2f);
 
     private:
-        int resolution;
+        int res_height;
+        int res_width;
         int framerateLimit;
         int nextLine;
 

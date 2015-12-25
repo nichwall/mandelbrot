@@ -21,13 +21,14 @@ double interpolate(double min, double max, int range) { return (max-min)/range; 
 void handleKeyboard(MandelbrotViewer *brot, sf::Event *event);
 void handleZoom(MandelbrotViewer *brot, sf::Event *event);
 void handleDrag(MandelbrotViewer *brot, sf::Event *event);
+void handleResize(MandelbrotViewer *brot, sf::Event *event);
 double handleRotate();
 void zoom();
 
 int main() {
     
     //create the mandelbrotviewer instance
-    MandelbrotViewer brot(820);
+    MandelbrotViewer brot(820, 820);
 
     //initialize the image
     brot.resetMandelbrot();
@@ -67,6 +68,11 @@ int main() {
             //if the window regains focus, refresh it
             case sf::Event::GainedFocus:
                 brot.refreshWindow();
+                break;
+
+            //if the event is a resize, handle it
+            case sf::Event::Resized:
+                handleResize(&brot, &event);
                 break;
 
             //if the window is closed
@@ -321,7 +327,7 @@ void handleDrag(MandelbrotViewer *brot, sf::Event *event) {
     difference.y = new_position.y - old_position.y;
 
     //set the old center
-    old_center = sf::Vector2f(brot->getResolution()/2.0, brot->getResolution()/2.0);
+    old_center = sf::Vector2f(brot->getResWidth()/2.0, brot->getResHeight()/2.0);
 
     //calculate the new center
     new_center = old_center - difference;
@@ -381,4 +387,14 @@ double handleRotate() {
 
     //return the rotation in radians
     return rotation * PI / 180;
+}
+
+//handle the window resize
+void handleResize(MandelbrotViewer *brot, sf::Event *event) {
+    int newX = event->size.width,
+        newY = event->size.height;
+    brot->resizeWindow(newX, newY);
+    brot->generate();
+    brot->updateMandelbrot();
+    brot->refreshWindow();
 }
