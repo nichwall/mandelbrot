@@ -96,6 +96,27 @@ bool MandelbrotViewer::isOpen() {
     return window->isOpen();
 }
 
+void MandelbrotViewer::incIterations() {
+    //if iterations is in the hundreds, add 100
+    //if iterations is in the thousands, add 1000, etc.
+    int magnitude = (int) log10(max_iter);
+    unsigned int inc = pow(10, magnitude);
+    max_iter += inc;
+    initPalette();
+}
+
+void MandelbrotViewer::decIterations() {
+    //if iterations is in the hundreds, subtract 100
+    //if iterations is in the thousands, subtract 1000, etc.
+    if (max_iter > 100) {
+        int magnitude = (int) log10(max_iter);
+        unsigned int dec = pow(10, magnitude);
+        if (dec == max_iter) dec /= 10;
+        max_iter -= dec;
+        initPalette();
+    }
+}
+
 //this is a setter function to change the color scheme
 //it also handles all the regeneration and refreshing
 void MandelbrotViewer::setColorScheme(int newScheme) {
@@ -455,7 +476,7 @@ int MandelbrotViewer::escape(sf::Vector2<double> point) {
             x_square = x*x;
             y_square = y*y;
 
-            //if the magnitued is greater than 2, it will escape
+            //if the magnitude is greater than 2, it will escape
             if (x_square + y_square > 4.0) return iter;
 
             //another optimization: it checks if the new 'z' is a repeat. If so,

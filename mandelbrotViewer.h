@@ -32,7 +32,9 @@ class MandelbrotViewer {
         bool isOpen();
         
         //Setter functions:
-        void setIterations(int iter) {max_iter = iter; if(!color_locked) initPalette();}
+        void incIterations();
+        void decIterations();
+        void setIterations(int iter) {max_iter = iter; initPalette();}
         void setColorMultiple(double mult) {color_multiple = mult;}
         void setFramerate(int rate) {framerateLimit = rate;}
         void setColorScheme(int newScheme);
@@ -73,16 +75,15 @@ class MandelbrotViewer {
         int nextLine;
         int finished_threads;
 
-        //These are pointers to each instance's window and view
-        //since we can't initialize them yet
-        sf::RenderWindow *window;
-        sf::View *view;
-
         sf::Sprite sprite;
         sf::Image image;
         sf::Texture texture;
         sf::Font font;
 
+        //These are pointers to each instance's window and view
+        //since we can't initialize them yet
+        sf::RenderWindow *window;
+        sf::View *view;
 
         //Parameters to generate the mandelbrot:
         bool restart_gen; //set to true to stop generation before it's finished
