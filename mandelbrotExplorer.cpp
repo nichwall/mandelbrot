@@ -52,7 +52,7 @@ int main() {
     //main window loop
     while (brot.isOpen()) {
 
-        brot.getEvent(param.event);
+        brot.waitEvent(param.event);
 
         handleEvent();
 
@@ -108,6 +108,10 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
     switch(event->key.code) {
         //if Q, quit and close the window
         case sf::Keyboard::Q:
+            brot->close();
+            break;
+        //if Esc, quit and close the window
+        case sf::Keyboard::Escape:
             brot->close();
             break;
         //if up arrow, increase iterations
@@ -189,7 +193,7 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         case sf::Keyboard::H:
             brot->enableOverlay(true);
             while(true) {
-                brot->getEvent(*event);
+                brot->waitEvent(*event);
                 if (event->type == sf::Event::KeyPressed) {
                     if (event->key.code == sf::Keyboard::H || event->key.code == sf::Keyboard::Escape) {
                         break;
@@ -431,7 +435,7 @@ void eventPoll() {
                 //handle the interrupt,
                 handleEvent();
                 //send the generation an interrupt,
-                param.brot->restartGeneration(true);
+                param.brot->restartGeneration();
             }
         }
         //sleep a bit so that the processor doesn't spike checking for events

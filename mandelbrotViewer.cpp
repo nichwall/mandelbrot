@@ -38,6 +38,7 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     sprite.setTexture(texture);
     scheme = 1;
     
+    //initialize the color palette
     color_locked = false;
     std::vector<int> pal_row(max_iter);
     palette.push_back(pal_row);
@@ -62,7 +63,8 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     max_threads = std::thread::hardware_concurrency();
 
     //disable repeated keys
-//    window->setKeyRepeatEnabled(false);
+    //window->setKeyRepeatEnabled(false);
+
     rotation = 0;
 }
 
@@ -82,7 +84,7 @@ sf::Vector2f MandelbrotViewer::getMandelbrotCenter() {
 }
 
 //wait for and return the next event from the viewer
-bool MandelbrotViewer::getEvent(sf::Event& event) {
+bool MandelbrotViewer::waitEvent(sf::Event& event) {
     return window->waitEvent(event);
 }
 
@@ -145,7 +147,6 @@ void MandelbrotViewer::lockColor() {
         changeColor();
         updateMandelbrot();
         refreshWindow();
-        color_max = max_iter;
     } else {
         color_locked = true;
     }
@@ -251,7 +252,6 @@ void MandelbrotViewer::generate() {
 
     //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
-
 }
 
 //this is a private worker thread function. Each thread picks the next ungenerated
@@ -361,6 +361,7 @@ void MandelbrotViewer::saveImage() {
 
     //save the image and print confirmation
     image.saveToFile(filename);
+    std::cout << "Saved image to " << filename << std::endl;
 }
 
 //enables an overlay that dims the screen and displays controls/stats/etc.
@@ -383,6 +384,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
                         "H                 - Help menu\n"
                         "S                 - Save image\n"
                         "R                 - Reset\n"
+                        "L                 - Lock Colors\n"
                         "Q                 - Quit\n"
                         "Page up           - Rotate counter-clockwise\n"
                         "Page down         - Rotate clockwise\n"
@@ -390,7 +392,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
                         "------------------------------------------------\n");
         controls.setCharacterSize(24);
         controls.setColor(sf::Color::White);
-        controls.setPosition(40, 30);
+        controls.setPosition(40, 20);
 
         //set up the stats part
         std::stringstream ss;
@@ -403,16 +405,16 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         int zoom_level = log2(2.0/area.width);
         ss << "\n\nZoom level: " << zoom_level;
         if (color_locked)
-            ss << "\t\t\t\t\t\tColor is locked";
+            ss << "\t\t\t\t\tColor is locked";
         else
-            ss << "\t\t\t\t\t\tColor is unlocked";
+            ss << "\t\t\t\t\tColor is unlocked";
 		ss << "\n\nIterations: " << max_iter << std::fixed << std::setprecision(0);
         ss << "\n\nRotation: " << angle << " degrees";
 
         stats.setFont(font);
         stats.setString(ss.str());
         stats.setCharacterSize(24);
-        stats.setPosition(40, 475);
+        stats.setPosition(40, 485);
 
         //set up the screen fade
         sf::RectangleShape rectangle;
@@ -542,11 +544,12 @@ sf::Vector2<double> MandelbrotViewer::rotate(sf::Vector2<double> rect) {
 //Sets up the palette array
 void MandelbrotViewer::initPalette() {
 
+    //if the color is locked, it shouldn't resize the palette
+    //(that would change the color scale)
     if (!color_locked) {
         palette[0].resize(max_iter);
         palette[1].resize(max_iter);
         palette[2].resize(max_iter);
-        color_max = max_iter;
     }
 
     //define some non-standard colors
@@ -593,8 +596,8 @@ void MandelbrotViewer::initPalette() {
 
 //Smooshes two colors together, and writes them to the palette in the specified range
 void MandelbrotViewer::smoosh(sf::Color c1, sf::Color c2, float min_per, float max_per) {
-    int min = (int) (min_per * color_max);
-    int max = (int) (max_per * color_max);
+    int min = (int) (min_per * palette[0].size());
+    int max = (int) (max_per * palette[0].size());
     int range = max-min;
 
     double r_inc = interpolate(c1.r, c2.r, range);

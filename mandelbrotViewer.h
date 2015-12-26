@@ -26,7 +26,7 @@ class MandelbrotViewer {
         sf::Vector2i getMousePosition();
         sf::Vector2f getViewCenter() {return view->getCenter();}
         sf::Vector2f getMandelbrotCenter();
-        bool getEvent(sf::Event&);
+        bool waitEvent(sf::Event&);
         bool pollEvent(sf::Event&);
         bool isColorLocked() {return color_locked;}
         bool isOpen();
@@ -39,7 +39,7 @@ class MandelbrotViewer {
         void setFramerate(int rate) {framerateLimit = rate;}
         void setColorScheme(int newScheme);
         void setRotation(double radians);
-        void restartGeneration(bool stop) {restart_gen = true;};
+        void restartGeneration() {restart_gen = true;}
         void lockColor();
         
         //Functions to change parameters for mandelbrot generation:
@@ -97,7 +97,6 @@ class MandelbrotViewer {
         //this changes how the colors are displayed
         double color_multiple;
         bool color_locked;
-        unsigned int color_max;
         int scheme;
 
         //Holds the maximum number of concurrent threads suppported by the current CPU
