@@ -27,14 +27,18 @@ class MandelbrotViewer {
         sf::Vector2f getViewCenter() {return view->getCenter();}
         sf::Vector2f getMandelbrotCenter();
         bool getEvent(sf::Event&);
+        bool pollEvent(sf::Event&);
+        bool isColorLocked() {return color_locked;}
         bool isOpen();
         
         //Setter functions:
-        void setIterations(int iter) {last_max_iter = max_iter; max_iter = iter;}
+        void setIterations(int iter) {max_iter = iter; if(!color_locked) initPalette();}
         void setColorMultiple(double mult) {color_multiple = mult;}
         void setFramerate(int rate) {framerateLimit = rate;}
         void setColorScheme(int newScheme);
         void setRotation(double radians);
+        void restartGeneration(bool stop) {restart_gen = true;};
+        void lockColor();
         
         //Functions to change parameters for mandelbrot generation:
         void changeColor();
@@ -67,6 +71,7 @@ class MandelbrotViewer {
         int res_width;
         int framerateLimit;
         int nextLine;
+        int finished_threads;
 
         //These are pointers to each instance's window and view
         //since we can't initialize them yet
@@ -78,7 +83,9 @@ class MandelbrotViewer {
         sf::Texture texture;
         sf::Font font;
 
+
         //Parameters to generate the mandelbrot:
+        bool restart_gen; //set to true to stop generation before it's finished
         
         //this is the area of the complex plane to generate
         sf::Rect<double> area;
@@ -88,6 +95,8 @@ class MandelbrotViewer {
         
         //this changes how the colors are displayed
         double color_multiple;
+        bool color_locked;
+        unsigned int color_max;
         int scheme;
 
         //Holds the maximum number of concurrent threads suppported by the current CPU
@@ -98,8 +107,9 @@ class MandelbrotViewer {
 
         //maximum number of iterations to check for. Higher values are slower,
         //but more precise
-        int max_iter;
-        int last_max_iter;
+        unsigned int max_iter;
+        unsigned int last_max_iter;
+
 
         //Functions:
         
@@ -123,9 +133,9 @@ class MandelbrotViewer {
 
         //initialize the color palette. Having a palette helps avoid regenerating the
         //color scheme each time it is needed
-        int palette[3][256];
+        std::vector< std::vector<int> > palette;
         void initPalette();
-        void smoosh(sf::Color c1, sf::Color c2, int min, int max);
+        void smoosh(sf::Color c1, sf::Color c2, float min, float max);
 };
 
 #endif

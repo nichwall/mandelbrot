@@ -21,3 +21,4 @@ Click and Drag - ...click and drag
 Page Up - rotate counter clockwise  
 Page Down - rotate clockwise  
 Home - reset rotation  
+L - lock color   
