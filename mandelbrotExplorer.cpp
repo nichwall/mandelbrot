@@ -1,4 +1,5 @@
 #include "mandelbrotViewer.h"
+#include <chrono>
 #include <iostream>
 #include <thread>
 
@@ -7,22 +8,27 @@
 //this struct holds the parameters for the zoom function,
 //since it needs to be threaded and thus cannot accept arguments
 struct zoomParameters {
-    MandelbrotViewer *viewer;
+    MandelbrotViewer *brot;
     sf::Vector2f oldc;
     sf::Vector2f newc;
+    sf::Event event;
     double zoom;
     int frames;
+    bool done;
 } param;
 
 //returns range increments to get from min to max
 double interpolate(double min, double max, int range) { return (max-min)/range; }
 
 //function prototypes
+void handleEvent();
 void handleKeyboard(MandelbrotViewer *brot, sf::Event *event);
 void handleZoom(MandelbrotViewer *brot, sf::Event *event);
 void handleDrag(MandelbrotViewer *brot, sf::Event *event);
 void handleResize(MandelbrotViewer *brot, sf::Event *event);
 double handleRotate();
+void handleGenerate();
+void eventPoll();
 void zoom();
 
 int main() {
@@ -37,7 +43,8 @@ int main() {
     brot.refreshWindow();
 
     //point the zoom function to the 'brot' instance
-    param.viewer = &brot;
+    param.brot = &brot;
+    param.done = true;
 
     //create an event to test for input
     sf::Event event;
@@ -45,49 +52,55 @@ int main() {
     //main window loop
     while (brot.isOpen()) {
 
-        brot.getEvent(event);
+        brot.waitEvent(param.event);
 
-        //this big switch statement handles all types of input
-        switch (event.type) {
-
-            //if the event is a keypress
-            case sf::Event::KeyPressed:
-                handleKeyboard(&brot, &event);
-                break;
-
-            //if the event is a mousewheel scroll, zoom
-            case sf::Event::MouseWheelScrolled:
-                handleZoom(&brot, &event);
-                break;
-
-            //if the event is a click, drag the view:
-            case sf::Event::MouseButtonPressed:
-                handleDrag(&brot, &event);
-                break;
-
-            //if the window regains focus, refresh it
-            case sf::Event::GainedFocus:
-                brot.refreshWindow();
-                break;
-
-            //if the event is a resize, handle it
-            case sf::Event::Resized:
-                handleResize(&brot, &event);
-                break;
-
-            //if the window is closed
-            case sf::Event::Closed:
-                brot.close();
-                break;
-
-            default:
-                break;
-        } //end event switch
+        handleEvent();
 
     } //end main window loop
 
     return 0;
 } //end main
+
+//this function handles all events
+void handleEvent() {
+    //this switch statement handles all types of input
+    switch (param.event.type) {
+
+        //if the event is a keypress
+        case sf::Event::KeyPressed:
+            handleKeyboard(param.brot, &param.event);
+            break;
+
+            //if the event is a mousewheel scroll, zoom
+        case sf::Event::MouseWheelScrolled:
+            handleZoom(param.brot, &param.event);
+            break;
+
+            //if the event is a click, drag the view:
+        case sf::Event::MouseButtonPressed:
+            handleDrag(param.brot, &param.event);
+            break;
+
+            //if the window regains focus, refresh it
+        case sf::Event::GainedFocus:
+            param.brot->refreshWindow();
+            break;
+
+            //if the event is a resize, handle it
+        case sf::Event::Resized:
+            handleResize(param.brot, &param.event);
+            break;
+
+            //if the window is closed
+        case sf::Event::Closed:
+            param.brot->close();
+            break;
+
+        default:
+            break;
+    } //end event switch
+}
+
 
 //this function handles all keyboard input
 void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
@@ -97,20 +110,27 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         case sf::Keyboard::Q:
             brot->close();
             break;
+        //if Esc, quit and close the window
+        case sf::Keyboard::Escape:
+            brot->close();
+            break;
         //if up arrow, increase iterations
         case sf::Keyboard::Up:
-            brot->setIterations(brot->getIters() + 50);
-            brot->generate();
-            brot->updateMandelbrot();
-            brot->refreshWindow();
+            brot->incIterations();
+            if (param.done) {
+                handleGenerate();
+                brot->updateMandelbrot();
+                brot->refreshWindow();
+            }
             break;
         //if down arrow, decrease iterations
         case sf::Keyboard::Down:
-            if (brot->getIters() > 100)
-                brot->setIterations(brot->getIters() - 50);
-            brot->generate();
-            brot->updateMandelbrot();
-            brot->refreshWindow();
+            brot->decIterations();
+            if (param.done) {
+                handleGenerate();
+                brot->updateMandelbrot();
+                brot->refreshWindow();
+            }
             break;
         //if right arrow, increase color_multiple until released
         case sf::Keyboard::Right:
@@ -154,14 +174,6 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         case sf::Keyboard::Num5:
             brot->setColorScheme(5);
             break;
-        //if it's a 6, change to color scheme 6
-        case sf::Keyboard::Num6:
-            brot->setColorScheme(6);
-            break;
-        //if it's a 7, change to color scheme 7
-        case sf::Keyboard::Num7:
-            brot->setColorScheme(7);
-            break;
         //if R, reset the mandelbrot to the starting image
         case sf::Keyboard::R:
             brot->resetMandelbrot();
@@ -174,10 +186,14 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         case sf::Keyboard::S:
             brot->saveImage();
             break;
+        //if L, lock/unlock the color
+        case sf::Keyboard::L:
+            brot->lockColor();
+            break;
         case sf::Keyboard::H:
             brot->enableOverlay(true);
             while(true) {
-                brot->getEvent(*event);
+                brot->waitEvent(*event);
                 if (event->type == sf::Event::KeyPressed) {
                     if (event->key.code == sf::Keyboard::H || event->key.code == sf::Keyboard::Escape) {
                         break;
@@ -342,7 +358,7 @@ void handleDrag(MandelbrotViewer *brot, sf::Event *event) {
 //animates the zoom of the viewer (so the viewer zooms while the mandelbrot is generating)
 //uses the struct param as parameters
 void zoom() {
-    param.viewer->setWindowActive(true);
+    param.brot->setWindowActive(true);
     double inc_drag_x = interpolate(param.oldc.x, param.newc.x, param.frames);
     double inc_drag_y = interpolate(param.oldc.y, param.newc.y, param.frames);
     double inc_zoom = interpolate(1.0, param.zoom, param.frames);
@@ -351,39 +367,39 @@ void zoom() {
     for (int i=0; i<param.frames; i++) {
         param.newc.x = param.oldc.x + i * inc_drag_x;
         param.newc.y = param.oldc.y + i * inc_drag_y;
-        param.viewer->changePosView(param.newc, 1 + i * inc_zoom);
-        param.viewer->refreshWindow();
+        param.brot->changePosView(param.newc, 1 + i * inc_zoom);
+        param.brot->refreshWindow();
     }
-    param.viewer->setWindowActive(false);
+    param.brot->setWindowActive(false);
 }
 
 //rotates the view until the key is released, then returns the new rotation
 double handleRotate() {
     float rotate_inc = 1.0;
-    //float rotation = param.viewer->getRotation() * 180 / PI;
+    //float rotation = param.brot->getRotation() * 180 / PI;
     float rotation = 0;
-    int framerate = param.viewer->getFramerate();
+    int framerate = param.brot->getFramerate();
 
     //set the framerate high so that it will rotate in real time
-    param.viewer->setFramerate(500);
+    param.brot->setFramerate(500);
 
     //if page up, rotate ccw
     while (sf::Keyboard::isKeyPressed(sf::Keyboard::PageUp)) {
-        param.viewer->rotateView(rotation);
-        param.viewer->refreshWindow();
+        param.brot->rotateView(rotation);
+        param.brot->refreshWindow();
         rotation += rotate_inc;
         if (rotation >= 360) rotation -= 360;
     }
 
     //if page down, rotate cw
     while (sf::Keyboard::isKeyPressed(sf::Keyboard::PageDown)) {
-        param.viewer->rotateView(rotation);
-        param.viewer->refreshWindow();
+        param.brot->rotateView(rotation);
+        param.brot->refreshWindow();
         rotation -= rotate_inc;
         if (rotation < 0) rotation += 360;
     }
 
-    param.viewer->setFramerate(framerate);
+    param.brot->setFramerate(framerate);
 
     //return the rotation in radians
     return rotation * PI / 180;
@@ -397,4 +413,32 @@ void handleResize(MandelbrotViewer *brot, sf::Event *event) {
     brot->generate();
     brot->updateMandelbrot();
     brot->refreshWindow();
+}
+
+void handleGenerate() {
+    //start checking for events in a separate thread
+    param.done = false;
+    std::thread thread(eventPoll);
+    thread.detach();
+
+    //start generating
+    param.brot->generate();
+    param.done = true; //signal the eventPoll thread to return
+}
+
+void eventPoll() {
+    while(!param.done) {
+        if (param.brot->pollEvent(param.event)) {
+            if (param.event.type == sf::Event::KeyPressed && (param.event.key.code == sf::Keyboard::Up ||
+                        param.event.key.code == sf::Keyboard::Down)) {
+                //if input is found:
+                //handle the interrupt,
+                handleEvent();
+                //send the generation an interrupt,
+                param.brot->restartGeneration();
+            }
+        }
+        //sleep a bit so that the processor doesn't spike checking for events
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 }

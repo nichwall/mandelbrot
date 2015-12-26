@@ -32,15 +32,21 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     framerateLimit = 60;
     window->setFramerateLimit(framerateLimit);
 
-    //initialize the mandelbrot parameters
-    resetMandelbrot();
-
     //initialize the image
     texture.create(res_width, res_height);
     image.create(res_width, res_height, sf::Color::Black);
     sprite.setTexture(texture);
     scheme = 1;
-    initPalette(); 
+    
+    //initialize the color palette
+    color_locked = false;
+    std::vector<int> pal_row(max_iter);
+    palette.push_back(pal_row);
+    palette.push_back(pal_row);
+    palette.push_back(pal_row);
+
+    //initialize the mandelbrot parameters
+    resetMandelbrot();
 
     //initialize the font for the overlay
 	if (font.loadFromFile("cour.ttf"));
@@ -57,7 +63,8 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     max_threads = std::thread::hardware_concurrency();
 
     //disable repeated keys
-    window->setKeyRepeatEnabled(false);
+    //window->setKeyRepeatEnabled(false);
+
     rotation = 0;
 }
 
@@ -76,14 +83,40 @@ sf::Vector2f MandelbrotViewer::getMandelbrotCenter() {
     return center;
 }
 
-//gets the next event from the viewer
-bool MandelbrotViewer::getEvent(sf::Event& event) {
+//wait for and return the next event from the viewer
+bool MandelbrotViewer::waitEvent(sf::Event& event) {
     return window->waitEvent(event);
+}
+
+//poll for events from the viewer
+bool MandelbrotViewer::pollEvent(sf::Event& event) {
+    return window->pollEvent(event);
 }
 
 //checks if the window is open
 bool MandelbrotViewer::isOpen() {
     return window->isOpen();
+}
+
+void MandelbrotViewer::incIterations() {
+    //if iterations is in the hundreds, add 100
+    //if iterations is in the thousands, add 1000, etc.
+    int magnitude = (int) log10(max_iter);
+    unsigned int inc = pow(10, magnitude);
+    max_iter += inc;
+    initPalette();
+}
+
+void MandelbrotViewer::decIterations() {
+    //if iterations is in the hundreds, subtract 100
+    //if iterations is in the thousands, subtract 1000, etc.
+    if (max_iter > 100) {
+        int magnitude = (int) log10(max_iter);
+        unsigned int dec = pow(10, magnitude);
+        if (dec == max_iter) dec /= 10;
+        max_iter -= dec;
+        initPalette();
+    }
 }
 
 //this is a setter function to change the color scheme
@@ -105,6 +138,18 @@ void MandelbrotViewer::setRotation(double radians) {
     resetView();
     updateMandelbrot();
     refreshWindow();
+}
+
+void MandelbrotViewer::lockColor() {
+    if (color_locked) {
+        color_locked = false;
+        initPalette();
+        changeColor();
+        updateMandelbrot();
+        refreshWindow();
+    } else {
+        color_locked = true;
+    }
 }
 
 //Functions to change parameters of mandelbrot
@@ -179,18 +224,30 @@ void MandelbrotViewer::resizeWindow(int new_x, int new_y) {
 //generate the mandelbrot
 void MandelbrotViewer::generate() {
 
-    //make sure it starts at line 0
-    nextLine = 0;
+    bool done = false;
+    restart_gen = false;
 
-    //create the thread pool
-    std::vector<std::thread> threadPool;
-    for (int i=0; i<max_threads; i++) {
-        threadPool.push_back(std::thread(&MandelbrotViewer::genLine, this));
-    }
+    while (!done) {
+        //make sure it starts at line 0
+        nextLine = 0;
+        finished_threads = 0;
 
-    //join the threads
-    for (int i=0; i<max_threads; i++) {
-        threadPool[i].join();
+        //create the thread pool
+        std::vector<std::thread> threadPool;
+        for (int i=0; i<max_threads; i++) {
+            threadPool.push_back(std::thread(&MandelbrotViewer::genLine, this));
+        }
+
+        //wait for the threads to finish
+        for (int i=0; i<max_threads; i++) {
+            threadPool[i].join();
+        }
+
+        //when the threads finish prematurely, reset needed variables and restart generation
+        if (restart_gen) {
+            done = false;
+            restart_gen = false;
+        } else done = true;
     }
 
     //reset last_max_iter to the new max_iter
@@ -215,9 +272,9 @@ void MandelbrotViewer::genLine() {
         row = nextLine++; //get the next ungenerated line
         mutex1.unlock();
 
-        //if all the rows have been generated, stop it from generating outside the bounds
-        //of the image
-        if (row >= res_height) return;
+        //stop generating if it has reached the last row or has been
+        //signaled to stop
+        if (row >= res_height || restart_gen) return;
 
         //calculate the row height in the complex plane
         point.y = area.top + row * y_inc;
@@ -225,13 +282,13 @@ void MandelbrotViewer::genLine() {
         //now loop through and generate all the pixels in that row
         for (column = 0; column < res_width; column++) {
 
-            // Check if we increased iterations and if the pixel already diverged
-            if ( last_max_iter < max_iter && image_array[row][column] < last_max_iter ) {
+            //check if we increased iterations and if the pixel already diverged
+            if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) {
                 iter = image_array[row][column];
-            } // Check if we decreased iterations and if the pixel already converged
-            else if ( last_max_iter > max_iter && image_array[row][column] > max_iter) {
+            } //check if we decreased iterations and if the pixel already converged
+            else if (last_max_iter > max_iter && image_array[row][column] > max_iter) {
                 iter = image_array[row][column];
-            } // Check if we zoomed or didn't change iterations
+            } //check if we zoomed or didn't change iterations
             else {
                 //calculate the next x coordinate of the complex plane
                 point.x = area.left + column * x_inc;
@@ -261,6 +318,8 @@ void MandelbrotViewer::resetMandelbrot() {
     last_max_iter = 100;
     color_multiple = 1;
     rotation = 0;
+    color_locked = false;
+    initPalette();
 }
 
 //refreshes the window: clear, draw, display
@@ -325,6 +384,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
                         "H                 - Help menu\n"
                         "S                 - Save image\n"
                         "R                 - Reset\n"
+                        "L                 - Lock Colors\n"
                         "Q                 - Quit\n"
                         "Page up           - Rotate counter-clockwise\n"
                         "Page down         - Rotate clockwise\n"
@@ -332,7 +392,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
                         "------------------------------------------------\n");
         controls.setCharacterSize(24);
         controls.setColor(sf::Color::White);
-        controls.setPosition(40, 30);
+        controls.setPosition(40, 20);
 
         //set up the stats part
         std::stringstream ss;
@@ -344,13 +404,17 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         ss << std::defaultfloat;
         int zoom_level = log2(2.0/area.width);
         ss << "\n\nZoom level: " << zoom_level;
+        if (color_locked)
+            ss << "\t\t\t\t\tColor is locked";
+        else
+            ss << "\t\t\t\t\tColor is unlocked";
 		ss << "\n\nIterations: " << max_iter << std::fixed << std::setprecision(0);
         ss << "\n\nRotation: " << angle << " degrees";
 
         stats.setFont(font);
         stats.setString(ss.str());
         stats.setCharacterSize(24);
-        stats.setPosition(40, 475);
+        stats.setPosition(40, 485);
 
         //set up the screen fade
         sf::RectangleShape rectangle;
@@ -414,7 +478,7 @@ int MandelbrotViewer::escape(sf::Vector2<double> point) {
             x_square = x*x;
             y_square = y*y;
 
-            //if the magnitued is greater than 2, it will escape
+            //if the magnitude is greater than 2, it will escape
             if (x_square + y_square > 4.0) return iter;
 
             //another optimization: it checks if the new 'z' is a repeat. If so,
@@ -429,7 +493,7 @@ int MandelbrotViewer::escape(sf::Vector2<double> point) {
 
 //findColor uses the number of iterations passed to it to look up a color in the palette
 sf::Color MandelbrotViewer::findColor(int iter) {
-    int i = fmod(iter * color_multiple, 255);
+    int i = (int) fmod(iter * color_multiple, palette[0].size());
     sf::Color color;
     if (iter >= max_iter) color = sf::Color::Black;
     else {
@@ -477,100 +541,68 @@ sf::Vector2<double> MandelbrotViewer::rotate(sf::Vector2<double> rect) {
     return rect;
 }
 
-//This is for initPalette, it makes sure the given number is between 0 and 255
-int coerce(int number) {
-    if (number > 255) number = 255;
-    else if (number < 0) number = 0;
-    return number;
-}
-
 //Sets up the palette array
 void MandelbrotViewer::initPalette() {
+
+    //if the color is locked, it shouldn't resize the palette
+    //(that would change the color scale)
+    if (!color_locked) {
+        palette[0].resize(max_iter);
+        palette[1].resize(max_iter);
+        palette[2].resize(max_iter);
+    }
+
     //define some non-standard colors
     sf::Color orange;
     orange.r = 255;
     orange.g = 165;
     orange.b = 0;
-    sf::Color pink;
-    pink.r = 255;
-    pink.g = 135;
-    pink.b = 135;
-    sf::Color dark_red;
-    dark_red.r = 209;
-    dark_red.g = 2;
-    dark_red.b = 2;
-    sf::Color dark_green;
-    dark_green.r = 8;
-    dark_green.g = 172;
-    dark_green.b = 8;
-    sf::Color light_green;
-    light_green.r = 115;
-    light_green.g = 255;
-    light_green.b = 115;
+
     switch (scheme) {
         //scheme one is black:blue:white:orange:black
         case 1:
-            smoosh(sf::Color::Black, sf::Color::Blue, 0, 64);
-            smoosh(sf::Color::Blue, sf::Color::White, 64, 144);
-            smoosh(sf::Color::White, orange, 144, 196);
-            smoosh(orange, sf::Color::Black, 196, 256);
+            smoosh(sf::Color::Black, sf::Color::Blue, 0, 0.25);
+            smoosh(sf::Color::Blue, sf::Color::White, 0.25, 0.56);
+            smoosh(sf::Color::White, orange, 0.56, 0.75);
+            smoosh(orange, sf::Color::Black, 0.75, 1);
             break;
-        //scheme two is black:green:blue:black
+        //scheme two is black:red:orange:black
         case 2:
-            smoosh(sf::Color::Black, sf::Color::Green, 0, 85);
-            smoosh(sf::Color::Green, sf::Color::Blue, 85, 170);
-            smoosh(sf::Color::Blue, sf::Color::Black, 170, 256);
+            smoosh(sf::Color::Black, sf::Color::Red, 0, 0.7);
+            smoosh(sf::Color::Red, orange, 0.7, 0.84);
+            smoosh(orange, sf::Color::Black, 0.84, 1);
             break;
-        //scheme three is black:red:orange:black
+        //scheme three is black:cyan:white:black
         case 3:
-            smoosh(sf::Color::Black, sf::Color::Red, 0, 180);
-            smoosh(sf::Color::Red, orange, 180, 215);
-            smoosh(orange, sf::Color::Black, 215, 256);
+            smoosh(sf::Color::Black, sf::Color::Cyan, 0, 0.43);
+            smoosh(sf::Color::Cyan, sf::Color::White, 0.43, 0.86);
+            smoosh(sf::Color::White, sf::Color::Black, 0.86, 1);
             break;
-        //scheme four is black:cyan:white:black
+        //scheme four is red:orange:yellow:green:blue:magenta:red
         case 4:
-            smoosh(sf::Color::Black, sf::Color::Cyan, 0, 110);
-            smoosh(sf::Color::Cyan, sf::Color::White, 110, 220);
-            smoosh(sf::Color::White, sf::Color::Black, 220, 256);
+            smoosh(sf::Color::Red, orange, 0, 0.17);
+            smoosh(orange, sf::Color::Yellow, 0.17, 0.33);
+            smoosh(sf::Color::Yellow, sf::Color::Green, 0.33, 0.5);
+            smoosh(sf::Color::Green, sf::Color::Blue, 0.5, 0.67);
+            smoosh(sf::Color::Blue, sf::Color::Magenta, 0.67, 0.83);
+            smoosh(sf::Color::Magenta, sf::Color::Red, 0.83, 1);
             break;
-        //scheme five is red:orange:yellow:green:blue:magenta:red
+        //scheme five is black:white
         case 5:
-            smoosh(sf::Color::Red, orange, 0, 42);
-            smoosh(orange, sf::Color::Yellow, 42, 84);
-            smoosh(sf::Color::Yellow, sf::Color::Green, 84, 127);
-            smoosh(sf::Color::Green, sf::Color::Blue, 127, 170);
-            smoosh(sf::Color::Blue, sf::Color::Magenta, 170, 212);
-            smoosh(sf::Color::Magenta, sf::Color::Red, 212, 256);
+            smoosh(sf::Color::White, sf::Color::Black, 0, 1);
             break;
-        //scheme six is dark_red:pink, then dark_green:light_green
-        case 6:
-            smoosh(dark_red, pink, 0, 128);
-            smoosh(dark_green, light_green, 128, 256);
-            break;
-        //scheme seven is smoky... black:white
-        case 7:
-            smoosh(sf::Color::White, sf::Color::Black, 0, 256);
-            break;
-        default:
-            int r, g, b;
-            for (int i = 0; i <= 255; i++) {
-                r = (int) (23.45 - 1.880*i + 0.0461*i*i - 0.000152*i*i*i);
-                g = (int) (17.30 - 0.417*i + 0.0273*i*i - 0.000101*i*i*i);
-                b = (int) (25.22 + 7.902*i - 0.0681*i*i + 0.000145*i*i*i);
-
-                palette[0][i] = coerce(r);
-                palette[1][i] = coerce(g);
-                palette[2][i] = coerce(b);
-            }
     }
 }
 
 //Smooshes two colors together, and writes them to the palette in the specified range
-void MandelbrotViewer::smoosh(sf::Color c1, sf::Color c2, int min, int max) {
+void MandelbrotViewer::smoosh(sf::Color c1, sf::Color c2, float min_per, float max_per) {
+    int min = (int) (min_per * palette[0].size());
+    int max = (int) (max_per * palette[0].size());
     int range = max-min;
-    float r_inc = interpolate(c1.r, c2.r, range);
-    float g_inc = interpolate(c1.g, c2.g, range);
-    float b_inc = interpolate(c1.b, c2.b, range);
+
+    double r_inc = interpolate(c1.r, c2.r, range);
+    double g_inc = interpolate(c1.g, c2.g, range);
+    double b_inc = interpolate(c1.b, c2.b, range);
 
     //loop through the palette setting new colors
     for (int i=0; i < range; i++) {
