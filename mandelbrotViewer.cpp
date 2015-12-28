@@ -7,6 +7,9 @@
 #include <thread>
 #include <ctime>
 
+unsigned int iterSaved = 0;
+unsigned int totalIter = 0;
+
 # define PI 3.14159265358979323846
 
 //initialize a couple of global objects
@@ -53,11 +56,13 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
 	else if (font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
 	else std::cout << "ERROR: unable to load font\n";
 
-    //initialize the image_array
+    //initialize the iter_array and image_array
     size_t sizeX = res_width;
     size_t sizeY = res_height;
-    std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
-    image_array = array;
+    std::vector< std::vector<int> > array1(sizeY, std::vector<int>(sizeX));
+    std::vector< std::vector<int> > array2(sizeY, std::vector<int>(sizeX));
+    iter_array = array1;
+    image_array = array2;
 
     //get the number of supported concurrent threads
     max_threads = std::thread::hardware_concurrency();
@@ -69,6 +74,16 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
 }
 
 MandelbrotViewer::~MandelbrotViewer() { }
+
+
+//random useful functions
+
+//reset all elements of a 2D vector to 0
+void zeroVector2(std::vector< std::vector<int> > &v) {
+    for (int i=0; i<v.size(); i++) {
+        std::fill(v[i].begin(), v[i].end(), 0);
+    }
+}
 
 //Accessors
 sf::Vector2i MandelbrotViewer::getMousePosition() {
@@ -140,6 +155,13 @@ void MandelbrotViewer::setRotation(double radians) {
     refreshWindow();
 }
 
+void MandelbrotViewer::setSkeleton(bool toggle) {
+    skeleton = toggle;
+    generate();
+    updateMandelbrot();
+    refreshWindow();
+}
+
 void MandelbrotViewer::lockColor() {
     if (color_locked) {
         color_locked = false;
@@ -175,6 +197,7 @@ void MandelbrotViewer::changePos(sf::Vector2<double> new_center, double zoom_fac
     area.height = area.height * zoom_factor;
     area.left = new_center.x - area.width / 2.0;
     area.top = new_center.y - area.height / 2.0;
+    area_inc = area.width/res_width;
     //NOTE: this is a relative zoom
 }
 
@@ -192,19 +215,19 @@ void MandelbrotViewer::changePosView(sf::Vector2f new_center, double zoom_factor
 //handle resize events by modifying the area rectangle accordingly
 void MandelbrotViewer::resizeWindow(int new_x, int new_y) {
 
-    //save the old center and resolution
+    //save the old center
     double center_x = area.left + area.width/2.0;
     double center_y = area.top + area.height/2.0;
-    double inc = area.width/res_width;
 
     res_width = new_x;
     res_height = new_y;
 
     //calculate the new area
-    area.width = inc * res_width;
-    area.height = inc * res_height;
+    area.width = area_inc * res_width;
+    area.height = area_inc * res_height;
     area.left = center_x - area.width/2.0;
     area.top = center_y - area.height/2.0;
+    area_inc = area.width/res_width;
 
     //resize the image, texture, and sprite
     image.create(res_width, res_height, sf::Color::Black);
@@ -212,27 +235,30 @@ void MandelbrotViewer::resizeWindow(int new_x, int new_y) {
     sprite.setTextureRect(sf::IntRect(0, 0, res_width, res_height));
     sprite.setTexture(texture);
 
-    //resize the image_array
+    //resize the iter_array
     size_t sizeX = res_width;
     size_t sizeY = res_height;
-    std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
-    image_array = array;
+    std::vector< std::vector<int> > array1(sizeY, std::vector<int>(sizeX));
+    std::vector< std::vector<int> > array2(sizeY, std::vector<int>(sizeX));
+    iter_array = array1;
+    image_array = array2;
 
     resetView();
 }
 
 //generate the mandelbrot
 void MandelbrotViewer::generate() {
-
+/*
     bool done = false;
     restart_gen = false;
 
     while (!done) {
-        //make sure it starts at line 0
-        nextLine = 0;
-        finished_threads = 0;
 
-        //create the thread pool
+        //finished_threads is incremented each time a thread finishes
+        finished_threads = 0;
+        nextLine = 0; //start at the top --TODO: remove this with quadtree
+
+        //create and launch the thread pool
         std::vector<std::thread> threadPool;
         for (int i=0; i<max_threads; i++) {
             threadPool.push_back(std::thread(&MandelbrotViewer::genLine, this));
@@ -249,9 +275,207 @@ void MandelbrotViewer::generate() {
             restart_gen = false;
         } else done = true;
     }
+*/
+
+    //zero the image_array
+//    zeroVector2(image_array); //TODO is this necessary now?
+//    std::cout << "zeroed image_array\n";
+
+    iterSaved = 0;
+    totalIter = 0;
+    waiting_threads = 0;
+
+    //generate the border
+    for (int y=0; y<res_height; y++) {
+        image_array[y][0] = escape(y, 0);
+        image_array[y][res_width-1] = escape(y, res_width-1);
+    }
+    for (int x=0; x<res_width; x++) {
+        image_array[0][x] = escape(0, x);
+        image_array[res_height-1][x] = escape(res_height-1, x);
+    }
+
+    //generate a '+'
+    int y_mean = res_height/2;
+    for (int x=1; x<res_width; x++) {
+        image_array[y_mean][x] = escape(y_mean, x);
+    }
+    int x_mean = res_width/2;
+    for (int y=1; y<res_height; y++) {
+        image_array[y][x_mean] = escape(y, x_mean);
+    }
+
+    std::thread t1(&MandelbrotViewer::genSquare, this, 0, x_mean, 0, y_mean);
+    std::thread t2(&MandelbrotViewer::genSquare, this, 0, x_mean, y_mean, res_height-1);
+    std::thread t3(&MandelbrotViewer::genSquare, this, x_mean, res_width-1, 0, y_mean);
+    std::thread t4(&MandelbrotViewer::genSquare, this, x_mean, res_width-1, y_mean, res_height-1);
+
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+
+    //write the image using image_array
+    for (int row=0; row<res_height; row++) {
+        for (int column=0; column<res_width; column++) {
+            image.setPixel(column, row, findColor(image_array[row][column]));
+        }
+    }
 
     //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
+
+    std::cout << "Iterations saved by quadtree algorithm: " << iterSaved << "/" << iterSaved + totalIter << ": " << 100 * (iterSaved / ((float) iterSaved + totalIter)) << "%\n";
+}
+
+struct Square {
+    int x_min, x_max, y_min, y_max;
+    bool wakeup = false;
+} next_square;
+
+//this worker thread function checks the border of the square handed to it. If all the border
+//has the same # of iterations, it fills it in. If not, it splits it into four squares and
+//recursively calls itself to check each of the smaller squares
+void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
+
+    bool done = false;
+
+    while (!done) {
+
+        std::cout << "starting loop\n";
+        mutex1.lock();
+        int reference = image_array[y_min][x_min];
+        mutex1.unlock();
+        bool fillable = true;
+
+        //check left and right sides
+        mutex1.lock();
+        for (int y=y_min; y<=y_max; y++) {
+            if (image_array[y][x_min] != reference || image_array[y][x_max] != reference) {
+                fillable = false;
+                break;
+            }
+        }
+        mutex1.unlock();
+
+        //check top and bottom
+        if (fillable) {
+            mutex1.lock();
+            for (int x=x_min; x<=x_max; x++) {
+                if (image_array[y_min][x] != reference || image_array[y_max][x] != reference) {
+                    fillable = false;
+                    break;
+                }
+            }
+            mutex1.unlock();
+        }
+
+        //if all sides check out, fill it in
+        if (fillable) {
+            mutex1.lock();
+            for (int x=x_min+1; x<x_max; x++) {
+                for (int y=y_min+1; y<y_max; y++) {
+                    if (skeleton) image_array[y][x] = 0;
+                    else image_array[y][x] = reference;
+                    iterSaved += reference;
+                }
+            }
+            mutex1.unlock();
+        }
+        //if the sides do not check out, split the square into four and check each of them
+        else {
+            //generate a '+' in the middle of the square, effectively splitting it into 4
+            int y_mean = y_min + (y_max - y_min)/2;
+            if (y_mean == y_min) return; //if it's 2x2, return
+            mutex1.lock();
+            for (int x=x_min+1; x<x_max; x++) {
+                image_array[y_mean][x] = escape(y_mean, x);
+            }
+            int x_mean = x_min + (x_max - x_min)/2;
+            if (x_mean == x_min) return; //if it's 2x2, return
+            for (int y=y_min+1; y<y_max; y++) {
+                image_array[y][x_mean] = escape(y, x_mean);
+            }
+            mutex1.unlock();
+
+            //check each new square. If there are unoccupied threads, delegate to them
+            {
+                std::lock_guard<std::mutex> lk(thread_mutex);
+                if (waiting_threads) {
+                    waiting_threads--;
+                    std::cout << "delegating\n";
+                    next_square.x_min = x_min;
+                    next_square.x_max = x_mean;
+                    next_square.y_min = y_min;
+                    next_square.y_max = y_mean;
+                    next_square.wakeup = true;
+                    thread_cv.notify_one();
+                } else {
+                    lk.~lock_guard();
+                    genSquare(x_min, x_mean, y_min, y_mean);
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> lk(thread_mutex);
+                if (waiting_threads) {
+                    waiting_threads--;
+                    std::cout << "delegating\n";
+                    next_square.x_min = x_min;
+                    next_square.x_max = x_mean;
+                    next_square.y_min = y_mean;
+                    next_square.y_max = y_max;
+                    next_square.wakeup = true;
+                    thread_cv.notify_one();
+                } else {
+                    lk.~lock_guard();
+                    genSquare(x_min, x_mean, y_mean, y_max);
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> lk(thread_mutex);
+                if (waiting_threads) {
+                    waiting_threads--;
+                    std::cout << "delegating\n";
+                    next_square.x_min = x_mean;
+                    next_square.x_max = x_max;
+                    next_square.y_min = y_min;
+                    next_square.y_max = y_mean;
+                    next_square.wakeup = true;
+                    thread_cv.notify_one();
+                } else {
+                    lk.~lock_guard();
+                    genSquare(x_mean, x_max, y_min, y_mean);
+                }
+            }
+
+            genSquare(x_mean, x_max, y_mean, y_max);
+        }
+
+        //keep track of how many threads are waiting. It will wake up if signaled by another
+        //thread, or if all threads are waiting (i.e. it's done)
+        {
+            std::unique_lock<std::mutex> lk(thread_mutex);
+            waiting_threads++;
+            std::cout << "waiting " << waiting_threads << "\n";
+            //if the last thread starts waiting, notify the others that it's done and return
+            if (waiting_threads == max_threads) {
+                lk.unlock();
+                thread_cv.notify_all();
+                return;
+            }
+            thread_cv.wait(lk, [&]{return (waiting_threads == max_threads || next_square.wakeup);});
+            if (next_square.wakeup) {
+                x_min = next_square.x_min;
+                x_max = next_square.x_max;
+                y_min = next_square.y_min;
+                y_max = next_square.y_max;
+                next_square.wakeup = false;
+                done = false;
+            } else if (waiting_threads == max_threads) done = true;
+        }
+    }
 }
 
 //this is a private worker thread function. Each thread picks the next ungenerated
@@ -259,9 +483,7 @@ void MandelbrotViewer::generate() {
 void MandelbrotViewer::genLine() {
 
     int iter, row, column;
-    sf::Vector2<double> point;
-    double x_inc = interpolate(area.width, res_width);
-    double y_inc = interpolate(area.height, res_height);
+    sf::Vector2f point;
     sf::Color color;
 
     while(true) {
@@ -276,24 +498,10 @@ void MandelbrotViewer::genLine() {
         //signaled to stop
         if (row >= res_height || restart_gen) return;
 
-        //calculate the row height in the complex plane
-        point.y = area.top + row * y_inc;
-
         //now loop through and generate all the pixels in that row
         for (column = 0; column < res_width; column++) {
 
-            //check if we increased iterations and if the pixel already diverged
-            if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) {
-                iter = image_array[row][column];
-            } //check if we decreased iterations and if the pixel already converged
-            else if (last_max_iter > max_iter && image_array[row][column] > max_iter) {
-                iter = image_array[row][column];
-            } //check if we zoomed or didn't change iterations
-            else {
-                //calculate the next x coordinate of the complex plane
-                point.x = area.left + column * x_inc;
-                iter = escape(point);
-            }
+            iter = escape(row, column);
 
             //mutex this too so that the image is not accessed multiple times simultaneously
             mutex2.lock();
@@ -310,8 +518,8 @@ void MandelbrotViewer::genLine() {
 void MandelbrotViewer::resetMandelbrot() {
     area.top = -1;
     area.height = 2;
-    double inc = area.height/res_height;
-    area.width = inc * res_width;
+    area_inc = area.height/res_height;
+    area.width = area_inc * res_width;
     area.left = -0.5 - area.width/2.0;
 
     max_iter = 100;
@@ -320,11 +528,12 @@ void MandelbrotViewer::resetMandelbrot() {
     rotation = 0;
     color_locked = false;
     initPalette();
+    skeleton = false;
 }
 
 //refreshes the window: clear, draw, display
 void MandelbrotViewer::refreshWindow() {
-    window->clear(sf::Color::Black);
+    window->clear(sf::Color::White);
     window->setView(*view);
     window->draw(sprite);
     window->display();
@@ -373,26 +582,27 @@ void MandelbrotViewer::enableOverlay(bool enable) {
     if (enable) {
         //set up the controls part
         controls.setFont(font);
-        controls.setString("                 Help Menu (H)\n"
+        controls.setString("                 Help Menu (Tab)\n"
                         "Controls\n"
                         "------------------------------------------------\n"
+                        "Tab               - Help menu\n"
                         "Left/Right arrows - Change colors\n"
                         "Up/Down arrows    - Increase/decrease iterations\n"
                         "Click and Drag    - Move around\n"
                         "Numbers 1-7       - Change color scheme\n"
                         "Scroll            - Zoom in/out\n"
-                        "H                 - Help menu\n"
                         "S                 - Save image\n"
                         "R                 - Reset\n"
                         "L                 - Lock Colors\n"
+                        "K                 - Toggle skeleton mode\n"
                         "Q                 - Quit\n"
                         "Page up           - Rotate counter-clockwise\n"
                         "Page down         - Rotate clockwise\n"
                         "Home              - Reset rotation\n"
                         "------------------------------------------------\n");
-        controls.setCharacterSize(24);
+        controls.setCharacterSize(22);
         controls.setColor(sf::Color::White);
-        controls.setPosition(40, 20);
+        controls.setPosition(40, 30);
 
         //set up the stats part
         std::stringstream ss;
@@ -409,12 +619,16 @@ void MandelbrotViewer::enableOverlay(bool enable) {
         else
             ss << "\t\t\t\t\tColor is unlocked";
 		ss << "\n\nIterations: " << max_iter << std::fixed << std::setprecision(0);
+        if (skeleton)
+            ss << "\t\t\t\tSkeleton mode enabled";
+        else
+            ss << "\t\t\t\tSkeleton mode disabled";
         ss << "\n\nRotation: " << angle << " degrees";
 
         stats.setFont(font);
         stats.setString(ss.str());
-        stats.setCharacterSize(24);
-        stats.setPosition(40, 485);
+        stats.setCharacterSize(22);
+        stats.setPosition(40, 490);
 
         //set up the screen fade
         sf::RectangleShape rectangle;
@@ -442,34 +656,40 @@ void MandelbrotViewer::rotateView(float angle) {
 //coordinates on the complex plane
 sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
     sf::Vector2<double> comp;
-    comp.x = area.left + pix.x * interpolate(area.width, res_width);
-    comp.y = area.top + pix.y * interpolate(area.height, res_height);
+    comp.x = area.left + pix.x * area_inc;
+    comp.y = area.top + pix.y * area_inc;
     return comp;
 }
 
 //this function calculates the escape-time of the given coordinate
 //it is the brain of the mandelbrot program: it does the work to
 //make the pretty pictures :)
-int MandelbrotViewer::escape(sf::Vector2<double> point) {
-    
-    //rotate the point first
-    point = rotate(point);
+int MandelbrotViewer::escape(int row, int column) {
 
-    double x = 0, y = 0, x_check = 0, y_check = 0;
-    int iter = 0, period = 2;
+    //check if we increased iterations and if the pixel already diverged
+    if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) {
+        return image_array[row][column];
+    } //check if we decreased iterations and if the pixel already converged
+    else if (last_max_iter > max_iter && image_array[row][column] > max_iter) {
+        return image_array[row][column];
+    } //if not, use the escape-time algorithm to calculate iter
+    else {
+        //convert from pixel to complex coordinates
+        sf::Vector2f pnt(column, row);
+        sf::Vector2<double> point = pixelToComplex(pnt);
+        
+        //rotate the point
+        if (rotation) point = rotate(point);
 
-    double x_square = 0;
-    double y_square = 0;
+        double x = 0, y = 0;
+        int iter = 0;
 
-    //this is a specialized version of z = z^2 + c. It only does three multiplications,
-    //instead of the normal six. Multplications are very costly with such high precision
-    while(period < max_iter) {
-        x_check = x;
-        y_check = y;
-        period += period;
+        double x_square = 0;
+        double y_square = 0;
 
-        if (period > max_iter) period = max_iter;
-        for (; iter < period; iter++) {
+        //this is a specialized version of z = z^2 + c. It only does three multiplications,
+        //instead of the normal six. Multplications are very costly with such high precision
+        for (; iter < max_iter; iter++) {
             y = x * y;
             y += y; //multiply by two
             y += point.y;
@@ -480,12 +700,6 @@ int MandelbrotViewer::escape(sf::Vector2<double> point) {
 
             //if the magnitude is greater than 2, it will escape
             if (x_square + y_square > 4.0) return iter;
-
-            //another optimization: it checks if the new 'z' is a repeat. If so,
-            //it knows that it is in a loop and will not escape
-            if ((x == x_check) && (y == y_check)){
-                return max_iter;
-            }
         }
     }
     return max_iter;
@@ -496,7 +710,9 @@ sf::Color MandelbrotViewer::findColor(int iter) {
     int i = (int) fmod(iter * color_multiple, palette[0].size());
     sf::Color color;
     if (iter >= max_iter) color = sf::Color::Black;
-    else {
+    else if (iter == 0) {
+        color = sf::Color::White;
+    } else {
         color.r = palette[0][i];
         color.g = palette[1][i];
         color.b = palette[2][i];

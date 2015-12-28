@@ -2,6 +2,8 @@
 #define MANDELBROTVIEWER_H
 
 #include <SFML/Graphics.hpp>
+#include <mutex>
+#include <condition_variable>
 #include <vector>
 
 struct Color {
@@ -29,6 +31,7 @@ class MandelbrotViewer {
         bool waitEvent(sf::Event&);
         bool pollEvent(sf::Event&);
         bool isColorLocked() {return color_locked;}
+        bool isSkeleton() {return skeleton;}
         bool isOpen();
         
         //Setter functions:
@@ -39,6 +42,7 @@ class MandelbrotViewer {
         void setFramerate(int rate) {framerateLimit = rate;}
         void setColorScheme(int newScheme);
         void setRotation(double radians);
+        void setSkeleton(bool);
         void restartGeneration() {restart_gen = true;}
         void lockColor();
         
@@ -80,6 +84,11 @@ class MandelbrotViewer {
         sf::Texture texture;
         sf::Font font;
 
+        //Mutex and condition variable for syncing threads
+        std::mutex thread_mutex;
+        std::condition_variable thread_cv;
+        unsigned int waiting_threads;
+
         //These are pointers to each instance's window and view
         //since we can't initialize them yet
         sf::RenderWindow *window;
@@ -90,6 +99,7 @@ class MandelbrotViewer {
         
         //this is the area of the complex plane to generate
         sf::Rect<double> area;
+        double area_inc; //this is complex plane area per pixel
 
         //this is the current rotation of the mandelbrot - 0 radians is positive x axis
         double rotation;
@@ -97,13 +107,15 @@ class MandelbrotViewer {
         //this changes how the colors are displayed
         double color_multiple;
         bool color_locked;
+        bool skeleton; //if true, show skeleton view
         int scheme;
 
         //Holds the maximum number of concurrent threads suppported by the current CPU
         unsigned int max_threads;
 
         //this array stores the number of iterations for each pixel
-        std::vector< std::vector<int> > image_array;
+        std::vector< std::vector<int> > iter_array;  //store iterations
+        std::vector< std::vector<int> > image_array; //temp store iterations for generation
 
         //maximum number of iterations to check for. Higher values are slower,
         //but more precise
@@ -118,10 +130,11 @@ class MandelbrotViewer {
         double interpolate(double length, int range) {return length/range;}
 
         //escape calculates the escape-time of given point of the mandelbrot
-        int escape(sf::Vector2<double> point);
+        int escape(int row, int column);
 
         //genLine is a function for worker threads: it generates the next line of the
         //mandelbrot, then moves onto the next, until the entire mandelbrot is generated
+        void genSquare(int x_min, int x_max, int y_min, int y_max);
         void genLine();
 
         //this looks up a color to print according to the escape value given

@@ -114,23 +114,31 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         case sf::Keyboard::Escape:
             brot->close();
             break;
+        //if K, toggle skeleton view
+        case sf::Keyboard::K:
+            if (brot->isSkeleton()) brot->setSkeleton(false);
+            else brot->setSkeleton(true);
+            break;
         //if up arrow, increase iterations
         case sf::Keyboard::Up:
             brot->incIterations();
-            if (param.done) {
-                handleGenerate();
+            //TODO
+            //if (param.done) {
+                //handleGenerate();
+                brot->generate();
                 brot->updateMandelbrot();
                 brot->refreshWindow();
-            }
+            //}
             break;
         //if down arrow, decrease iterations
         case sf::Keyboard::Down:
             brot->decIterations();
-            if (param.done) {
-                handleGenerate();
+            //if (param.done) {
+                //handleGenerate();
+                brot->generate();
                 brot->updateMandelbrot();
                 brot->refreshWindow();
-            }
+            //}
             break;
         //if right arrow, increase color_multiple until released
         case sf::Keyboard::Right:
@@ -190,12 +198,12 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
         case sf::Keyboard::L:
             brot->lockColor();
             break;
-        case sf::Keyboard::H:
+        case sf::Keyboard::Tab:
             brot->enableOverlay(true);
             while(true) {
                 brot->waitEvent(*event);
                 if (event->type == sf::Event::KeyPressed) {
-                    if (event->key.code == sf::Keyboard::H || event->key.code == sf::Keyboard::Escape) {
+                    if (event->key.code == sf::Keyboard::Tab || event->key.code == sf::Keyboard::Escape) {
                         break;
                     } else if (event-> key.code == sf::Keyboard::Q) {
                         brot->close();
