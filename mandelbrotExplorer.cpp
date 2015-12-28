@@ -142,23 +142,25 @@ void handleKeyboard(MandelbrotViewer *brot, sf::Event *event) {
             break;
         //if right arrow, increase color_multiple until released
         case sf::Keyboard::Right:
-            color_inc = interpolate(0, 1, 25);
+            color_inc = interpolate(0, 1, 10);
             while (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
                 brot->setColorMultiple(brot->getColorMultiple() + color_inc);
                 brot->changeColor();
                 brot->updateMandelbrot();
                 brot->refreshWindow();
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
             }
             break;
         //if left arrow, decrease color_multiple until released
         case sf::Keyboard::Left:
-            color_inc = interpolate(1, 0, 25);
+            color_inc = interpolate(1, 0, 10);
             while (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
                 if (brot->getColorMultiple() > 1) {
                     brot->setColorMultiple(brot->getColorMultiple() + color_inc);
                     brot->changeColor();
                     brot->updateMandelbrot();
                     brot->refreshWindow();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
                 }
             }
             break;
