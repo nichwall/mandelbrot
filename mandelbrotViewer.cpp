@@ -588,9 +588,13 @@ int MandelbrotViewer::escape(int row, int column) {
             y_square = y*y;
 
             //if the magnitude is greater than 2, it will escape
-            if (x_square + y_square > 4.0) return iter;
+            if (x_square + y_square > 4.0) {
+                totalIter += iter;
+                return iter;
+            }
         }
     }
+    totalIter += max_iter;
     return max_iter;
 }
 
