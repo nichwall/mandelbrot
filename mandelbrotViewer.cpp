@@ -283,7 +283,6 @@ void MandelbrotViewer::generate() {
 
     iterSaved = 0;
     totalIter = 0;
-    waiting_threads = 0;
 
     //generate the border
     for (int y=0; y<res_height; y++) {
@@ -294,26 +293,8 @@ void MandelbrotViewer::generate() {
         image_array[0][x] = escape(0, x);
         image_array[res_height-1][x] = escape(res_height-1, x);
     }
-
-    //generate a '+'
-    int y_mean = res_height/2;
-    for (int x=1; x<res_width; x++) {
-        image_array[y_mean][x] = escape(y_mean, x);
-    }
-    int x_mean = res_width/2;
-    for (int y=1; y<res_height; y++) {
-        image_array[y][x_mean] = escape(y, x_mean);
-    }
-
-    std::thread t1(&MandelbrotViewer::genSquare, this, 0, x_mean, 0, y_mean);
-    std::thread t2(&MandelbrotViewer::genSquare, this, 0, x_mean, y_mean, res_height-1);
-    std::thread t3(&MandelbrotViewer::genSquare, this, x_mean, res_width-1, 0, y_mean);
-    std::thread t4(&MandelbrotViewer::genSquare, this, x_mean, res_width-1, y_mean, res_height-1);
-
-    t1.join();
-    t2.join();
-    t3.join();
-    t4.join();
+    
+    genSquare(0, res_width-1, 0, res_height-1);
 
     //write the image using image_array
     for (int row=0; row<res_height; row++) {
@@ -328,153 +309,61 @@ void MandelbrotViewer::generate() {
     std::cout << "Iterations saved by quadtree algorithm: " << iterSaved << "/" << iterSaved + totalIter << ": " << 100 * (iterSaved / ((float) iterSaved + totalIter)) << "%\n";
 }
 
-struct Square {
-    int x_min, x_max, y_min, y_max;
-    bool wakeup = false;
-} next_square;
-
 //this worker thread function checks the border of the square handed to it. If all the border
 //has the same # of iterations, it fills it in. If not, it splits it into four squares and
 //recursively calls itself to check each of the smaller squares
 void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
 
-    bool done = false;
+    int reference = image_array[y_min][x_min];
+    bool fillable = true;
 
-    while (!done) {
+    //check left and right sides
+    for (int y=y_min; y<=y_max; y++) {
+        if (image_array[y][x_min] != reference || image_array[y][x_max] != reference) {
+            fillable = false;
+            break;
+        }
+    }
 
-        std::cout << "starting loop\n";
-        mutex1.lock();
-        int reference = image_array[y_min][x_min];
-        mutex1.unlock();
-        bool fillable = true;
-
-        //check left and right sides
-        mutex1.lock();
-        for (int y=y_min; y<=y_max; y++) {
-            if (image_array[y][x_min] != reference || image_array[y][x_max] != reference) {
+    //check top and bottom
+    if (fillable) {
+        for (int x=x_min; x<=x_max; x++) {
+            if (image_array[y_min][x] != reference || image_array[y_max][x] != reference) {
                 fillable = false;
                 break;
             }
         }
-        mutex1.unlock();
+    }
 
-        //check top and bottom
-        if (fillable) {
-            mutex1.lock();
-            for (int x=x_min; x<=x_max; x++) {
-                if (image_array[y_min][x] != reference || image_array[y_max][x] != reference) {
-                    fillable = false;
-                    break;
-                }
-            }
-            mutex1.unlock();
-        }
-
-        //if all sides check out, fill it in
-        if (fillable) {
-            mutex1.lock();
-            for (int x=x_min+1; x<x_max; x++) {
-                for (int y=y_min+1; y<y_max; y++) {
-                    if (skeleton) image_array[y][x] = 0;
-                    else image_array[y][x] = reference;
-                    iterSaved += reference;
-                }
-            }
-            mutex1.unlock();
-        }
-        //if the sides do not check out, split the square into four and check each of them
-        else {
-            //generate a '+' in the middle of the square, effectively splitting it into 4
-            int y_mean = y_min + (y_max - y_min)/2;
-            if (y_mean == y_min) return; //if it's 2x2, return
-            mutex1.lock();
-            for (int x=x_min+1; x<x_max; x++) {
-                image_array[y_mean][x] = escape(y_mean, x);
-            }
-            int x_mean = x_min + (x_max - x_min)/2;
-            if (x_mean == x_min) return; //if it's 2x2, return
+    //if all sides check out, fill it in
+    if (fillable) {
+        for (int x=x_min+1; x<x_max; x++) {
             for (int y=y_min+1; y<y_max; y++) {
-                image_array[y][x_mean] = escape(y, x_mean);
+                if (skeleton) image_array[y][x] = 0;
+                else image_array[y][x] = reference;
+                iterSaved += reference;
             }
-            mutex1.unlock();
-
-            //check each new square. If there are unoccupied threads, delegate to them
-            {
-                std::lock_guard<std::mutex> lk(thread_mutex);
-                if (waiting_threads) {
-                    waiting_threads--;
-                    std::cout << "delegating\n";
-                    next_square.x_min = x_min;
-                    next_square.x_max = x_mean;
-                    next_square.y_min = y_min;
-                    next_square.y_max = y_mean;
-                    next_square.wakeup = true;
-                    thread_cv.notify_one();
-                } else {
-                    lk.~lock_guard();
-                    genSquare(x_min, x_mean, y_min, y_mean);
-                }
-            }
-
-            {
-                std::lock_guard<std::mutex> lk(thread_mutex);
-                if (waiting_threads) {
-                    waiting_threads--;
-                    std::cout << "delegating\n";
-                    next_square.x_min = x_min;
-                    next_square.x_max = x_mean;
-                    next_square.y_min = y_mean;
-                    next_square.y_max = y_max;
-                    next_square.wakeup = true;
-                    thread_cv.notify_one();
-                } else {
-                    lk.~lock_guard();
-                    genSquare(x_min, x_mean, y_mean, y_max);
-                }
-            }
-
-            {
-                std::lock_guard<std::mutex> lk(thread_mutex);
-                if (waiting_threads) {
-                    waiting_threads--;
-                    std::cout << "delegating\n";
-                    next_square.x_min = x_mean;
-                    next_square.x_max = x_max;
-                    next_square.y_min = y_min;
-                    next_square.y_max = y_mean;
-                    next_square.wakeup = true;
-                    thread_cv.notify_one();
-                } else {
-                    lk.~lock_guard();
-                    genSquare(x_mean, x_max, y_min, y_mean);
-                }
-            }
-
-            genSquare(x_mean, x_max, y_mean, y_max);
+        }
+    }
+    //if the sides do not check out, split the square into four and check each of them
+    else {
+        //generate a '+' in the middle of the square, effectively splitting it into 4
+        int y_mean = y_min + (y_max - y_min)/2;
+        if (y_mean == y_min) return; //if it's 2x2, return
+        mutex1.lock();
+        for (int x=x_min+1; x<x_max; x++) {
+            image_array[y_mean][x] = escape(y_mean, x);
+        }
+        int x_mean = x_min + (x_max - x_min)/2;
+        if (x_mean == x_min) return; //if it's 2x2, return
+        for (int y=y_min+1; y<y_max; y++) {
+            image_array[y][x_mean] = escape(y, x_mean);
         }
 
-        //keep track of how many threads are waiting. It will wake up if signaled by another
-        //thread, or if all threads are waiting (i.e. it's done)
-        {
-            std::unique_lock<std::mutex> lk(thread_mutex);
-            waiting_threads++;
-            std::cout << "waiting " << waiting_threads << "\n";
-            //if the last thread starts waiting, notify the others that it's done and return
-            if (waiting_threads == max_threads) {
-                lk.unlock();
-                thread_cv.notify_all();
-                return;
-            }
-            thread_cv.wait(lk, [&]{return (waiting_threads == max_threads || next_square.wakeup);});
-            if (next_square.wakeup) {
-                x_min = next_square.x_min;
-                x_max = next_square.x_max;
-                y_min = next_square.y_min;
-                y_max = next_square.y_max;
-                next_square.wakeup = false;
-                done = false;
-            } else if (waiting_threads == max_threads) done = true;
-        }
+        genSquare(x_min, x_mean, y_min, y_mean);
+        genSquare(x_min, x_mean, y_mean, y_max);
+        genSquare(x_mean, x_max, y_min, y_mean);
+        genSquare(x_mean, x_max, y_mean, y_max);
     }
 }
 
