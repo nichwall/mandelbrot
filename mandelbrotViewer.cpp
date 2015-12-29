@@ -7,8 +7,6 @@
 #include <thread>
 #include <ctime>
 
-unsigned int iterSaved = 0;
-unsigned int totalIter = 0;
 
 # define PI 3.14159265358979323846
 
@@ -37,7 +35,7 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
 
     //initialize the image
     texture.create(res_width, res_height);
-    image.create(res_width, res_height, sf::Color::Black);
+    image.create(res_width, res_height, sf::Color::White);
     sprite.setTexture(texture);
     scheme = 1;
     
@@ -56,13 +54,13 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
 	else if (font.loadFromFile("C:\\Windows\\Fonts\\cour.ttf"));
 	else std::cout << "ERROR: unable to load font\n";
 
-    //initialize the iter_array and image_array
+    //initialize the iter_array
     size_t sizeX = res_width;
     size_t sizeY = res_height;
-    std::vector< std::vector<int> > array1(sizeY, std::vector<int>(sizeX));
-    std::vector< std::vector<int> > array2(sizeY, std::vector<int>(sizeX));
-    iter_array = array1;
-    image_array = array2;
+    std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
+    iter_array = array;
+    border_array = array;
+    fill_array = array;
 
     //get the number of supported concurrent threads
     max_threads = std::thread::hardware_concurrency();
@@ -181,7 +179,7 @@ void MandelbrotViewer::lockColor() {
 void MandelbrotViewer::changeColor() {
     for (int i=0; i<res_height; i++) {
         for (int j=0; j<res_width; j++) {
-            image.setPixel(j, i, findColor(image_array[i][j]));
+            image.setPixel(j, i, findColor(iter_array[i][j]));
         }
     }
 }
@@ -238,10 +236,10 @@ void MandelbrotViewer::resizeWindow(int new_x, int new_y) {
     //resize the iter_array
     size_t sizeX = res_width;
     size_t sizeY = res_height;
-    std::vector< std::vector<int> > array1(sizeY, std::vector<int>(sizeX));
-    std::vector< std::vector<int> > array2(sizeY, std::vector<int>(sizeX));
-    iter_array = array1;
-    image_array = array2;
+    std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
+    iter_array = array;
+    border_array = array;
+    fill_array = array;
 
     resetView();
 }
@@ -277,49 +275,138 @@ void MandelbrotViewer::generate() {
     }
 */
 
-    //zero the image_array
-//    zeroVector2(image_array); //TODO is this necessary now?
-//    std::cout << "zeroed image_array\n";
+    //zero the writtable arrays
+    zeroVector2(border_array);
+    zeroVector2(fill_array);
 
-    iterSaved = 0;
-    totalIter = 0;
+    //reset waiting threads to 0
+    waiting_threads = 0;
 
     //generate the border
     for (int y=0; y<res_height; y++) {
-        image_array[y][0] = escape(y, 0);
-        image_array[y][res_width-1] = escape(y, res_width-1);
+        border_array[y][0] = escape(y, 0);
+        border_array[y][res_width-1] = escape(y, res_width-1);
     }
     for (int x=0; x<res_width; x++) {
-        image_array[0][x] = escape(0, x);
-        image_array[res_height-1][x] = escape(res_height-1, x);
+        border_array[0][x] = escape(0, x);
+        border_array[res_height-1][x] = escape(res_height-1, x);
     }
-    
-    genSquare(0, res_width-1, 0, res_height-1);
 
-    //write the image using image_array
+/*
+    //create and launch the thread pool
+    std::vector<std::thread> threadPool;
+    for (int i=0; i<max_threads; i++) {
+        if (i == 0)
+            threadPool.push_back(std::thread(&MandelbrotViewer::quadTreeWorker, this, true));
+        else
+            threadPool.push_back(std::thread(&MandelbrotViewer::quadTreeWorker, this, false));
+    }
+
+    //wait for the threads to finish
+    for (int i=0; i<max_threads; i++) {
+        threadPool[i].join();
+    }
+*/
+    std::thread t1(&MandelbrotViewer::quadTreeWorker, this, true);
+    t1.join();
+
+    std::cout << "all done, displaying image...\n";
+
+    //combine border_array and fill_array into iter_array
     for (int row=0; row<res_height; row++) {
         for (int column=0; column<res_width; column++) {
-            image.setPixel(column, row, findColor(image_array[row][column]));
+            if (border_array[row][column])
+                iter_array[row][column] = border_array[row][column];
+            else if (fill_array[row][column])
+                iter_array[row][column] = fill_array[row][column];
         }
     }
+
+    //write the image using iter_array
+    if (!skeleton) {
+        for (int row=0; row<res_height; row++) {
+            for (int column=0; column<res_width; column++) {
+                image.setPixel(column, row, findColor(iter_array[row][column]));
+            }
+        }
+     } else {
+         for (int row=0; row<res_height; row++) {
+             for (int column=0; column<res_width; column++) {
+                 image.setPixel(column, row, findColor(border_array[row][column]));
+             }
+         }
+     }
 
     //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
 
-    std::cout << "Iterations saved by quadtree algorithm: " << iterSaved << "/" << iterSaved + totalIter << ": " << 100 * (iterSaved / ((float) iterSaved + totalIter)) << "%\n";
+}
+
+struct Square {
+    int x_min, x_max, y_min, y_max;
+    bool wakeup = false;
+} next_square;
+
+//This function is for worker threads. The first instance of this function
+//should be called with start = true, the others with start = false.
+void MandelbrotViewer::quadTreeWorker(bool start) {
+    bool done = false;
+    int x_min, x_max, y_min, y_max;
+
+    if (start) genSquare(0, res_width-1, 0, res_height-1);
+
+    while (!done) {
+        //start waiting. It will wake up if signaled by another thread,
+        //or if all the threads are waiting (i.e. it's done)
+        {
+            std::unique_lock<std::mutex> lk(thread_mutex);
+            waiting_threads++;
+
+            //if the last thread starts waiting, notify the others that it's done and return
+            if (waiting_threads == 1) {
+                lk.unlock();
+                thread_cv.notify_all();
+                done = true;
+                std::cout << "program done, returning...\n";
+                return;
+            }
+
+            std::cout << waiting_threads << " threads waiting\n";
+            //wait for the program to finish or until the thread is needed again
+            thread_cv.wait(lk, [&]{return (waiting_threads == 1 || next_square.wakeup);});
+
+            //if it's done, return
+            if (waiting_threads == 1) done = true;
+            //otherwise, start generating the next square
+            else if (next_square.wakeup) {
+                std::cout << "waking up\n";
+                next_square.wakeup = false;
+                x_min = next_square.x_min;
+                x_max = next_square.x_max;
+                y_min = next_square.y_min;
+                y_max = next_square.y_max;
+                genSquare(x_min, x_max, y_min, y_max);
+                done = false;
+            }
+        }
+    }
 }
 
 //this worker thread function checks the border of the square handed to it. If all the border
 //has the same # of iterations, it fills it in. If not, it splits it into four squares and
 //recursively calls itself to check each of the smaller squares
 void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
+    std::cout << "starting genSquare\n";
 
-    int reference = image_array[y_min][x_min];
+    //shared mutex for reading border_array
+    border_mutex.lock_shared();
+    int reference = border_array[y_min][x_min];
+
     bool fillable = true;
 
     //check left and right sides
     for (int y=y_min; y<=y_max; y++) {
-        if (image_array[y][x_min] != reference || image_array[y][x_max] != reference) {
+        if (border_array[y][x_min] != reference || border_array[y][x_max] != reference) {
             fillable = false;
             break;
         }
@@ -328,76 +415,113 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
     //check top and bottom
     if (fillable) {
         for (int x=x_min; x<=x_max; x++) {
-            if (image_array[y_min][x] != reference || image_array[y_max][x] != reference) {
+            if (border_array[y_min][x] != reference || border_array[y_max][x] != reference) {
                 fillable = false;
                 break;
             }
         }
     }
+    //done checking border, unlock shared border_mutex
+    std::cout << "checked border\n";
+    border_mutex.unlock_shared();
 
     //if all sides check out, fill it in
     if (fillable) {
+        std::unique_lock<std::mutex> lk(fill_mutex); //lock mutex for writing to fill_array
+        std::cout << "filling...\n";
         for (int x=x_min+1; x<x_max; x++) {
             for (int y=y_min+1; y<y_max; y++) {
-                if (skeleton) image_array[y][x] = 0;
-                else image_array[y][x] = reference;
-                iterSaved += reference;
+                fill_array[y][x] = reference;
             }
         }
     }
+
     //if the sides do not check out, split the square into four and check each of them
     else {
         //generate a '+' in the middle of the square, effectively splitting it into 4
-        int y_mean = y_min + (y_max - y_min)/2;
-        if (y_mean == y_min) return; //if it's 2x2, return
-        mutex1.lock();
-        for (int x=x_min+1; x<x_max; x++) {
-            image_array[y_mean][x] = escape(y_mean, x);
+        //save it to two temporary 1D vectors
+        std::vector<int> vert(y_max-y_min-1);
+        std::vector<int> hori(y_max-y_min-1);
+
+        int y_mean = y_min + (y_max- y_min)/2;
+        if (y_mean == y_min) return; //if it's only 2 pixels high, return
+        for (int x=0; x<x_max-x_min-1; x++) {
+            hori[x] = escape(y_mean, x+x_min+1); //TODO does this work?
         }
-        int x_mean = x_min + (x_max - x_min)/2;
-        if (x_mean == x_min) return; //if it's 2x2, return
+        int x_mean = x_min + (x_max- x_min)/2;
+        if (x_mean == x_min) return; //if it's only 2 pixels wide, return
+        for (int y=0; y<y_max-y_min-1; y++) {
+            vert[y] = escape(y+y_min+1, x_mean); //TODO does this work?
+        }
+        
+        //now write those generated points to border_array
+        border_mutex.lock();
         for (int y=y_min+1; y<y_max; y++) {
-            image_array[y][x_mean] = escape(y, x_mean);
+            border_array[y][x_mean] = vert[y-y_min-1];
         }
-
-        genSquare(x_min, x_mean, y_min, y_mean);
-        genSquare(x_min, x_mean, y_mean, y_max);
-        genSquare(x_mean, x_max, y_min, y_mean);
+        for (int x=x_min+1; x<x_max; x++) {
+            border_array[y_mean][x] = vert[x-x_min-1];
+        }
+        std::cout << "generated +\n";
+        border_mutex.unlock();
+        
+        //check each of the sub-squares
+        //if there are unoccupied threads, delegate to them
+        { //top left square
+            std::unique_lock<std::mutex> lk(thread_mutex);
+            //std::cout << "generating 1st square\n";
+            if (waiting_threads) {
+                std::cout << "delegating 1... (" << waiting_threads << ")\n";
+                waiting_threads--;
+                next_square.x_min = x_min;
+                next_square.x_max = x_mean;
+                next_square.y_min = y_min;
+                next_square.y_max = y_mean;
+                next_square.wakeup = true;
+                thread_cv.notify_one();
+            } else {
+                lk.unlock();
+                genSquare(x_min, x_mean, y_min, y_mean);
+            }
+        }
+        { //bottom left square
+            std::unique_lock<std::mutex> lk(thread_mutex);
+            //std::cout << "generating 2nd square\n";
+            if (waiting_threads) {
+                std::cout << "delegating 2... (" << waiting_threads << ")\n";
+                waiting_threads--;
+                next_square.x_min = x_min;
+                next_square.x_max = x_mean;
+                next_square.y_min = y_mean;
+                next_square.y_max = y_max;
+                next_square.wakeup = true;
+                thread_cv.notify_one();
+            } else {
+                lk.unlock();
+                genSquare(x_min, x_mean, y_mean, y_max);
+            }
+        }
+        { //top right square
+            std::unique_lock<std::mutex> lk(thread_mutex);
+            //std::cout << "generating 3rd square\n";
+            if (waiting_threads) {
+                std::cout << "delegating 3... (" << waiting_threads << ")\n";
+                waiting_threads--;
+                next_square.x_min = x_mean;
+                next_square.x_max = x_max;
+                next_square.y_min = y_min;
+                next_square.y_max = y_mean;
+                next_square.wakeup = true;
+                thread_cv.notify_one();
+            } else {
+                lk.unlock();
+                genSquare(x_mean, x_max, y_min, y_mean);
+            }
+        }
+        //bottom right square
+        //std::cout << "generating 4th square\n";
         genSquare(x_mean, x_max, y_mean, y_max);
-    }
-}
-
-//this is a private worker thread function. Each thread picks the next ungenerated
-//row of pixels, generates it, then starts the next one
-void MandelbrotViewer::genLine() {
-
-    int iter, row, column;
-    sf::Vector2f point;
-    sf::Color color;
-
-    while(true) {
-
-        //the mutex avoids multiple threads writing to variables at the same time,
-        //which can corrupt the data
-        mutex1.lock();
-        row = nextLine++; //get the next ungenerated line
-        mutex1.unlock();
-
-        //stop generating if it has reached the last row or has been
-        //signaled to stop
-        if (row >= res_height || restart_gen) return;
-
-        //now loop through and generate all the pixels in that row
-        for (column = 0; column < res_width; column++) {
-
-            iter = escape(row, column);
-
-            //mutex this too so that the image is not accessed multiple times simultaneously
-            mutex2.lock();
-            image.setPixel(column, row, findColor(iter));
-            image_array[row][column] = iter;
-            mutex2.unlock();
-        }
+        //std::cout << "generating done\n";
     }
 }
 
@@ -556,12 +680,12 @@ sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
 int MandelbrotViewer::escape(int row, int column) {
 
     //check if we increased iterations and if the pixel already diverged
-    if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) {
-        return image_array[row][column];
-    } //check if we decreased iterations and if the pixel already converged
-    else if (last_max_iter > max_iter && image_array[row][column] > max_iter) {
-        return image_array[row][column];
-    } //if not, use the escape-time algorithm to calculate iter
+    if (last_max_iter < max_iter && iter_array[row][column] < last_max_iter) 
+        return iter_array[row][column];
+    //check if we decreased iterations and if the pixel already converged
+    else if (last_max_iter > max_iter && iter_array[row][column] > max_iter)
+        return iter_array[row][column];
+    //if not, use the escape-time algorithm to calculate iter
     else {
         //convert from pixel to complex coordinates
         sf::Vector2f pnt(column, row);
@@ -588,13 +712,9 @@ int MandelbrotViewer::escape(int row, int column) {
             y_square = y*y;
 
             //if the magnitude is greater than 2, it will escape
-            if (x_square + y_square > 4.0) {
-                totalIter += iter;
-                return iter;
-            }
+            if (x_square + y_square > 4.0) return iter;
         }
     }
-    totalIter += max_iter;
     return max_iter;
 }
 

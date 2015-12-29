@@ -3,6 +3,7 @@
 
 #include <SFML/Graphics.hpp>
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 #include <vector>
 
@@ -76,8 +77,6 @@ class MandelbrotViewer {
         int res_height;
         int res_width;
         int framerateLimit;
-        int nextLine;
-        int finished_threads;
 
         sf::Sprite sprite;
         sf::Image image;
@@ -86,6 +85,8 @@ class MandelbrotViewer {
 
         //Mutex and condition variable for syncing threads
         std::mutex thread_mutex;
+        std::mutex fill_mutex;
+        std::shared_timed_mutex border_mutex;
         std::condition_variable thread_cv;
         unsigned int waiting_threads;
 
@@ -115,7 +116,8 @@ class MandelbrotViewer {
 
         //this array stores the number of iterations for each pixel
         std::vector< std::vector<int> > iter_array;  //store iterations
-        std::vector< std::vector<int> > image_array; //temp store iterations for generation
+        std::vector< std::vector<int> > border_array;  //store borders of quadtree algorithm
+        std::vector< std::vector<int> > fill_array;  //store filled blocks of quadtree algorithm
 
         //maximum number of iterations to check for. Higher values are slower,
         //but more precise
@@ -135,7 +137,7 @@ class MandelbrotViewer {
         //genLine is a function for worker threads: it generates the next line of the
         //mandelbrot, then moves onto the next, until the entire mandelbrot is generated
         void genSquare(int x_min, int x_max, int y_min, int y_max);
-        void genLine();
+        void quadTreeWorker(bool start);
 
         //this looks up a color to print according to the escape value given
         sf::Color findColor(int iter);
