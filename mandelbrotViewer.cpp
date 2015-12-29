@@ -357,28 +357,36 @@ void MandelbrotViewer::quadTreeWorker(bool start) {
             waiting_threads++;
 
             //if the last thread starts waiting, notify the others that it's done and return
-            if (waiting_threads == 1) {
+            if (waiting_threads == max_threads) {
                 lk.unlock();
                 thread_cv.notify_all();
                 done = true;
-                std::cout << "program done, returning...\n";
+                std::cout << "generation done, returning...\n";
                 return;
             }
+            //TODO temporary
+            for (int row=0; row<res_height; row++) {
+                for (int column=0; column<res_width; column++) {
+                    image.setPixel(column, row, findColor(border_array[row][column]));
+                }
+            }
+            updateMandelbrot();
+            refreshWindow();
 
             std::cout << waiting_threads << " threads waiting\n";
             //wait for the program to finish or until the thread is needed again
-            thread_cv.wait(lk, [&]{return (waiting_threads == 1 || next_square.wakeup);});
+            thread_cv.wait(lk, [&]{return (waiting_threads == max_threads || next_square.wakeup);});
 
             //if it's done, return
-            if (waiting_threads == 1) done = true;
+            if (waiting_threads == max_threads) done = true;
             //otherwise, start generating the next square
             else if (next_square.wakeup) {
-                std::cout << "waking up\n";
                 next_square.wakeup = false;
                 x_min = next_square.x_min;
                 x_max = next_square.x_max;
                 y_min = next_square.y_min;
                 y_max = next_square.y_max;
+                lk.unlock();
                 genSquare(x_min, x_max, y_min, y_max);
                 done = false;
             }
@@ -390,7 +398,6 @@ void MandelbrotViewer::quadTreeWorker(bool start) {
 //has the same # of iterations, it fills it in. If not, it splits it into four squares and
 //recursively calls itself to check each of the smaller squares
 void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
-    //std::cout << "starting genSquare\n";
 
     //shared mutex for reading border_array
     border_mutex.lock_shared();
@@ -416,13 +423,11 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         }
     }
     //done checking border, unlock shared border_mutex
-    //std::cout << "checked border\n";
     border_mutex.unlock_shared();
 
     //if all sides check out, fill it in
     if (fillable) {
         std::unique_lock<std::mutex> lk(fill_mutex); //lock mutex for writing to fill_array
-        //std::cout << "filling...\n";
         for (int x=x_min+1; x<x_max; x++) {
             for (int y=y_min+1; y<y_max; y++) {
                 fill_array[y][x] = reference;
@@ -466,7 +471,6 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         { //top left square
             std::unique_lock<std::mutex> lk(thread_mutex);
             if (waiting_threads) {
-                std::cout << "delegating 1... (" << waiting_threads << ")\n";
                 waiting_threads--;
                 next_square.x_min = x_min;
                 next_square.x_max = x_mean;
@@ -481,9 +485,7 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         }
         { //bottom left square
             std::unique_lock<std::mutex> lk(thread_mutex);
-            //std::cout << "generating 2nd square\n";
             if (waiting_threads) {
-                std::cout << "delegating 2... (" << waiting_threads << ")\n";
                 waiting_threads--;
                 next_square.x_min = x_min;
                 next_square.x_max = x_mean;
@@ -498,9 +500,7 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         }
         { //top right square
             std::unique_lock<std::mutex> lk(thread_mutex);
-            //std::cout << "generating 3rd square\n";
             if (waiting_threads) {
-                std::cout << "delegating 3... (" << waiting_threads << ")\n";
                 waiting_threads--;
                 next_square.x_min = x_mean;
                 next_square.x_max = x_max;
@@ -514,9 +514,7 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
             }
         }
         //bottom right square
-        //std::cout << "generating 4th square\n";
         genSquare(x_mean, x_max, y_mean, y_max);
-        //std::cout << "generating done\n";
     }
 }
 
