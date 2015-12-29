@@ -292,7 +292,6 @@ void MandelbrotViewer::generate() {
         border_array[res_height-1][x] = escape(res_height-1, x);
     }
 
-/*
     //create and launch the thread pool
     std::vector<std::thread> threadPool;
     for (int i=0; i<max_threads; i++) {
@@ -306,11 +305,6 @@ void MandelbrotViewer::generate() {
     for (int i=0; i<max_threads; i++) {
         threadPool[i].join();
     }
-*/
-    std::thread t1(&MandelbrotViewer::quadTreeWorker, this, true);
-    t1.join();
-
-    std::cout << "all done, displaying image...\n";
 
     //combine border_array and fill_array into iter_array
     for (int row=0; row<res_height; row++) {
@@ -396,7 +390,7 @@ void MandelbrotViewer::quadTreeWorker(bool start) {
 //has the same # of iterations, it fills it in. If not, it splits it into four squares and
 //recursively calls itself to check each of the smaller squares
 void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
-    std::cout << "starting genSquare\n";
+    //std::cout << "starting genSquare\n";
 
     //shared mutex for reading border_array
     border_mutex.lock_shared();
@@ -422,13 +416,13 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         }
     }
     //done checking border, unlock shared border_mutex
-    std::cout << "checked border\n";
+    //std::cout << "checked border\n";
     border_mutex.unlock_shared();
 
     //if all sides check out, fill it in
     if (fillable) {
         std::unique_lock<std::mutex> lk(fill_mutex); //lock mutex for writing to fill_array
-        std::cout << "filling...\n";
+        //std::cout << "filling...\n";
         for (int x=x_min+1; x<x_max; x++) {
             for (int y=y_min+1; y<y_max; y++) {
                 fill_array[y][x] = reference;
@@ -438,38 +432,39 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
 
     //if the sides do not check out, split the square into four and check each of them
     else {
-        //generate a '+' in the middle of the square, effectively splitting it into 4
-        //save it to two temporary 1D vectors
-        std::vector<int> vert(y_max-y_min-1);
-        std::vector<int> hori(y_max-y_min-1);
-
+        int x_mean = x_min + (x_max- x_min)/2;
         int y_mean = y_min + (y_max- y_min)/2;
         if (y_mean == y_min) return; //if it's only 2 pixels high, return
-        for (int x=0; x<x_max-x_min-1; x++) {
-            hori[x] = escape(y_mean, x+x_min+1); //TODO does this work?
-        }
-        int x_mean = x_min + (x_max- x_min)/2;
         if (x_mean == x_min) return; //if it's only 2 pixels wide, return
-        for (int y=0; y<y_max-y_min-1; y++) {
-            vert[y] = escape(y+y_min+1, x_mean); //TODO does this work?
+
+        int vert[y_max-y_min-1];
+        int hori[y_max-y_min-1];
+        
+        //generate a '+' in the middle of the square, effectively splitting it into 4
+        //save it to two temporary 1D vectors
+        for (int x=x_min+1; x<x_max; x++) {
+            hori[x-x_min-1] = escape(y_mean, x);
+        }
+        for (int y=y_min+1; y<y_max; y++) {
+            vert[y-y_min-1] = escape(y, x_mean);
         }
         
         //now write those generated points to border_array
         border_mutex.lock();
         for (int y=y_min+1; y<y_max; y++) {
-            border_array[y][x_mean] = vert[y-y_min-1];
+            //border_array[y][x_mean] = vert[y-y_min-1];
+            border_array[y][x_mean] = vert[y-y_min-1]; 
         }
         for (int x=x_min+1; x<x_max; x++) {
-            border_array[y_mean][x] = vert[x-x_min-1];
+            //border_array[y_mean][x] = hori[x-x_min-1];
+            border_array[y_mean][x] = hori[x-x_min-1];
         }
-        std::cout << "generated +\n";
         border_mutex.unlock();
         
         //check each of the sub-squares
         //if there are unoccupied threads, delegate to them
         { //top left square
             std::unique_lock<std::mutex> lk(thread_mutex);
-            //std::cout << "generating 1st square\n";
             if (waiting_threads) {
                 std::cout << "delegating 1... (" << waiting_threads << ")\n";
                 waiting_threads--;
