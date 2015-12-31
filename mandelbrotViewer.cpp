@@ -7,12 +7,9 @@
 #include <thread>
 #include <ctime>
 
+int wakeups = 0;
 
 # define PI 3.14159265358979323846
-
-//initialize a couple of global objects
-sf::Mutex mutex1;
-sf::Mutex mutex2;
 
 //Constructor
 MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
@@ -279,8 +276,9 @@ void MandelbrotViewer::generate() {
     zeroVector2(border_array);
     zeroVector2(fill_array);
 
-    //reset waiting threads to 0
+    //reset # of waiting threads to 0
     waiting_threads = 0;
+    wakeups = 0;
 
     //generate the border
     for (int y=0; y<res_height; y++) {
@@ -330,10 +328,10 @@ void MandelbrotViewer::generate() {
              }
          }
      }
+    std::cout << "wakeups: " << wakeups << std::endl;
 
     //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
-
 }
 
 struct Square {
@@ -343,58 +341,53 @@ struct Square {
 
 //This function is for worker threads. The first instance of this function
 //should be called with start = true, the others with start = false.
+//Threads will wait until they are given a task by genSquare.
 void MandelbrotViewer::quadTreeWorker(bool start) {
     bool done = false;
     int x_min, x_max, y_min, y_max;
+
+    std::unique_lock<std::mutex> lk(thread_mutex);
+    lk.unlock();
 
     if (start) genSquare(0, res_width-1, 0, res_height-1);
 
     while (!done) {
         //start waiting. It will wake up if signaled by another thread,
         //or if all the threads are waiting (i.e. it's done)
-        {
-            std::unique_lock<std::mutex> lk(thread_mutex);
-            waiting_threads++;
+        lk.lock();
+        waiting_threads++;
 
-            //if the last thread starts waiting, notify the others that it's done and return
-            if (waiting_threads == max_threads) {
-                lk.unlock();
-                thread_cv.notify_all();
-                done = true;
-                std::cout << "generation done, returning...\n";
-                return;
-            }
-            //TODO temporary
-            for (int row=0; row<res_height; row++) {
-                for (int column=0; column<res_width; column++) {
-                    image.setPixel(column, row, findColor(border_array[row][column]));
-                }
-            }
-            updateMandelbrot();
-            refreshWindow();
+        //if the last thread starts waiting, notify the others that it's done and return
+        if (waiting_threads >= max_threads) {
+            lk.unlock();
+            thread_cv.notify_all();
+            done = true;
+            return;
+        }
 
-            std::cout << waiting_threads << " threads waiting\n";
-            //wait for the program to finish or until the thread is needed again
-            thread_cv.wait(lk, [&]{return (waiting_threads == max_threads || next_square.wakeup);});
+        //wait for the program to finish or until the thread is needed again
+        thread_cv.wait(lk, [&]{return (waiting_threads == max_threads || next_square.wakeup);});
 
-            //if it's done, return
-            if (waiting_threads == max_threads) done = true;
-            //otherwise, start generating the next square
-            else if (next_square.wakeup) {
-                next_square.wakeup = false;
-                x_min = next_square.x_min;
-                x_max = next_square.x_max;
-                y_min = next_square.y_min;
-                y_max = next_square.y_max;
-                lk.unlock();
-                genSquare(x_min, x_max, y_min, y_max);
-                done = false;
-            }
+        //if it's done, return
+        if (waiting_threads >= max_threads) {
+            lk.unlock(); //TODO is this necessary?
+            done = true;
+        }
+        //otherwise, start generating the next square
+        else if (next_square.wakeup) {
+            next_square.wakeup = false;
+            x_min = next_square.x_min;
+            x_max = next_square.x_max;
+            y_min = next_square.y_min;
+            y_max = next_square.y_max;
+            lk.unlock();
+            genSquare(x_min, x_max, y_min, y_max);
+            done = false;
         }
     }
 }
 
-//this worker thread function checks the border of the square handed to it. If all the border
+//this function checks the border of the square handed to it. If all the border
 //has the same # of iterations, it fills it in. If not, it splits it into four squares and
 //recursively calls itself to check each of the smaller squares
 void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
@@ -446,7 +439,7 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         int hori[y_max-y_min-1];
         
         //generate a '+' in the middle of the square, effectively splitting it into 4
-        //save it to two temporary 1D vectors
+        //save it to two temporary 1D arrays
         for (int x=x_min+1; x<x_max; x++) {
             hori[x-x_min-1] = escape(y_mean, x);
         }
@@ -468,51 +461,58 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         
         //check each of the sub-squares
         //if there are unoccupied threads, delegate to them
-        { //top left square
-            std::unique_lock<std::mutex> lk(thread_mutex);
-            if (waiting_threads) {
-                waiting_threads--;
-                next_square.x_min = x_min;
-                next_square.x_max = x_mean;
-                next_square.y_min = y_min;
-                next_square.y_max = y_mean;
-                next_square.wakeup = true;
-                thread_cv.notify_one();
-            } else {
-                lk.unlock();
-                genSquare(x_min, x_mean, y_min, y_mean);
-            }
+
+        //top left square
+        thread_mutex.lock();
+        if (waiting_threads && !next_square.wakeup && x_max-x_min > 100) {
+            next_square.x_min = x_min;
+            next_square.x_max = x_mean;
+            next_square.y_min = y_min;
+            next_square.y_max = y_mean;
+            next_square.wakeup = true;
+            waiting_threads--;
+            wakeups++;
+            thread_mutex.unlock();
+            thread_cv.notify_one();
+        } else {
+            thread_mutex.unlock();
+            genSquare(x_min, x_mean, y_min, y_mean);
         }
-        { //bottom left square
-            std::unique_lock<std::mutex> lk(thread_mutex);
-            if (waiting_threads) {
-                waiting_threads--;
-                next_square.x_min = x_min;
-                next_square.x_max = x_mean;
-                next_square.y_min = y_mean;
-                next_square.y_max = y_max;
-                next_square.wakeup = true;
-                thread_cv.notify_one();
-            } else {
-                lk.unlock();
-                genSquare(x_min, x_mean, y_mean, y_max);
-            }
+        
+        //bottom left square
+        thread_mutex.lock();
+        if (waiting_threads && !next_square.wakeup && x_max-x_min > 100) {
+            next_square.x_min = x_min;
+            next_square.x_max = x_mean;
+            next_square.y_min = y_mean;
+            next_square.y_max = y_max;
+            next_square.wakeup = true;
+            waiting_threads--;
+            wakeups++;
+            thread_mutex.unlock();
+            thread_cv.notify_one();
+        } else {
+            thread_mutex.unlock();
+            genSquare(x_min, x_mean, y_mean, y_max);
         }
-        { //top right square
-            std::unique_lock<std::mutex> lk(thread_mutex);
-            if (waiting_threads) {
-                waiting_threads--;
-                next_square.x_min = x_mean;
-                next_square.x_max = x_max;
-                next_square.y_min = y_min;
-                next_square.y_max = y_mean;
-                next_square.wakeup = true;
-                thread_cv.notify_one();
-            } else {
-                lk.unlock();
-                genSquare(x_mean, x_max, y_min, y_mean);
-            }
+
+        //top right square
+        thread_mutex.lock();
+        if (waiting_threads && !next_square.wakeup && x_max-x_min > 100) {
+            next_square.x_min = x_mean;
+            next_square.x_max = x_max;
+            next_square.y_min = y_min;
+            next_square.y_max = y_mean;
+            next_square.wakeup = true;
+            waiting_threads--;
+            wakeups++;
+            thread_mutex.unlock();
+            thread_cv.notify_one();
+        } else {
+            thread_mutex.unlock();
+            genSquare(x_mean, x_max, y_min, y_mean);
         }
+
         //bottom right square
         genSquare(x_mean, x_max, y_mean, y_max);
     }
