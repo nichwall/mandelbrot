@@ -8,6 +8,7 @@
 #include <ctime>
 
 int wakeups = 0;
+std::clock_t start;
 
 # define PI 3.14159265358979323846
 
@@ -247,6 +248,8 @@ void MandelbrotViewer::generate() {
     bool done = false;
     restart_gen = false;
 
+    start = std::clock();
+
     while (!done) {
 
         //finished_threads is incremented each time a thread finishes
@@ -271,6 +274,7 @@ void MandelbrotViewer::generate() {
         } else done = true;
     }
 */
+    start = std::clock();
 
     //zero the writtable arrays
     zeroVector2(border_array);
@@ -329,6 +333,8 @@ void MandelbrotViewer::generate() {
          }
      }
     std::cout << "wakeups: " << wakeups << std::endl;
+
+    std::cout << "time elapsed: " << (std::clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
 
     //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
@@ -439,22 +445,21 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         int hori[y_max-y_min-1];
         
         //generate a '+' in the middle of the square, effectively splitting it into 4
-        //save it to two temporary 1D arrays
+        //and save it to two temporary 1D arrays
         for (int x=x_min+1; x<x_max; x++) {
             hori[x-x_min-1] = escape(y_mean, x);
         }
         for (int y=y_min+1; y<y_max; y++) {
-            vert[y-y_min-1] = escape(y, x_mean);
+            if (y == y_mean) vert[y-y_min-1] = 0;
+            else vert[y-y_min-1] = escape(y, x_mean);
         }
         
         //now write those generated points to border_array
         border_mutex.lock();
         for (int y=y_min+1; y<y_max; y++) {
-            //border_array[y][x_mean] = vert[y-y_min-1];
             border_array[y][x_mean] = vert[y-y_min-1]; 
         }
         for (int x=x_min+1; x<x_max; x++) {
-            //border_array[y_mean][x] = hori[x-x_min-1];
             border_array[y_mean][x] = hori[x-x_min-1];
         }
         border_mutex.unlock();
@@ -463,8 +468,8 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
         //if there are unoccupied threads, delegate to them
 
         //top left square
-        thread_mutex.lock();
-        if (waiting_threads && !next_square.wakeup && x_max-x_min > 100) {
+        if (waiting_threads && !next_square.wakeup && x_max-x_min > 400) {
+            thread_mutex.lock();
             next_square.x_min = x_min;
             next_square.x_max = x_mean;
             next_square.y_min = y_min;
@@ -475,13 +480,12 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
             thread_mutex.unlock();
             thread_cv.notify_one();
         } else {
-            thread_mutex.unlock();
             genSquare(x_min, x_mean, y_min, y_mean);
         }
         
         //bottom left square
-        thread_mutex.lock();
-        if (waiting_threads && !next_square.wakeup && x_max-x_min > 100) {
+        if (waiting_threads && !next_square.wakeup && x_max-x_min > 400) {
+            thread_mutex.lock();
             next_square.x_min = x_min;
             next_square.x_max = x_mean;
             next_square.y_min = y_mean;
@@ -492,13 +496,12 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
             thread_mutex.unlock();
             thread_cv.notify_one();
         } else {
-            thread_mutex.unlock();
             genSquare(x_min, x_mean, y_mean, y_max);
         }
 
         //top right square
-        thread_mutex.lock();
-        if (waiting_threads && !next_square.wakeup && x_max-x_min > 100) {
+        if (waiting_threads && !next_square.wakeup && x_max-x_min > 400) {
+            thread_mutex.lock();
             next_square.x_min = x_mean;
             next_square.x_max = x_max;
             next_square.y_min = y_min;
@@ -509,7 +512,6 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
             thread_mutex.unlock();
             thread_cv.notify_one();
         } else {
-            thread_mutex.unlock();
             genSquare(x_mean, x_max, y_min, y_mean);
         }
 
