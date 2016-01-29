@@ -6,11 +6,22 @@
 #include <shared_mutex>
 #include <condition_variable>
 #include <vector>
+#include <atomic>
 
 struct Color {
     int r;
     int g;
     int b;
+};
+// Empty struct to store the blocks for master
+struct EmptySquare {
+    int min_x, max_x, min_y, max_y;
+};
+struct Plus {
+    int min_x, max_x, min_y, max_y;
+    int mid_x, mid_y;
+    std::vector<int> vertical;
+    std::vector<int> horizontal;
 };
 
 class MandelbrotViewer {
@@ -55,6 +66,7 @@ class MandelbrotViewer {
 
         //Functions to generate the mandelbrot:
         void generate();
+        void quadTree();
 
         //Functions to reset or update:
         void resetMandelbrot();
@@ -119,6 +131,7 @@ class MandelbrotViewer {
         std::vector< std::vector<int> > border_array;  //store borders of quadtree algorithm
         std::vector< std::vector<int> > fill_array;  //store filled blocks of quadtree algorithm
 
+
         //maximum number of iterations to check for. Higher values are slower,
         //but more precise
         unsigned int max_iter;
@@ -138,6 +151,28 @@ class MandelbrotViewer {
         //mandelbrot, then moves onto the next, until the entire mandelbrot is generated
         void genSquare(int x_min, int x_max, int y_min, int y_max);
         void quadTreeWorker(bool start);
+        
+        // **********************************************************************************
+        //N stuff
+        std::mutex plus_to_write_mutex;
+        std::mutex plus_queue_mutex;
+
+        std::vector< EmptySquare > border_queue; //store empty squares for master thread
+        std::vector< EmptySquare > plus_queue;  //store empty squares for slave  thread
+        std::vector< Plus >        plus_to_write;      //store the plus from genPlus
+        bool genDone;
+        std::atomic<unsigned int> running_slaves;
+
+        std::vector< std::vector<int> > master_generateBorder(const EmptySquare &square);
+        void generateOutside();
+        void slave_genPlus();
+        void master_push_empty(const Plus &plus);
+        bool master_checkBorder(const EmptySquare &square);
+        void master_fillSquare(const EmptySquare &map);
+        void master_write_plus(const Plus &plus);
+
+        //End N stuff
+        // **********************************************************************************
 
         //this looks up a color to print according to the escape value given
         sf::Color findColor(int iter);
