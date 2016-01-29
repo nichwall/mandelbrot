@@ -34,7 +34,8 @@ void zoom();
 int main() {
     
     //create the mandelbrotviewer instance
-    MandelbrotViewer brot(820, 820);
+//    MandelbrotViewer brot(820, 820);
+    MandelbrotViewer brot(100,100);
 
     //initialize the image
     brot.resetMandelbrot();

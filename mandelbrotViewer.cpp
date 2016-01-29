@@ -37,9 +37,12 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     sprite.setTexture(texture);
     scheme = 1;
     
+    max_iter = 100;
     //initialize the color palette
     color_locked = false;
+    printf("Constructor...%d\n",max_iter);
     std::vector<int> pal_row(max_iter);
+    printf("Done %d\n",max_iter);
     palette.push_back(pal_row);
     palette.push_back(pal_row);
     palette.push_back(pal_row);
@@ -58,7 +61,7 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     std::vector< std::vector<int> > array(sizeY, std::vector<int>(sizeX));
     iter_array = array;
     border_array = array;
-    fill_array = array;
+    //fill_array = array;
 
     //get the number of supported concurrent threads
     max_threads = std::thread::hardware_concurrency();
@@ -75,9 +78,11 @@ MandelbrotViewer::~MandelbrotViewer() { }
 //random useful functions
 
 //reset all elements of a 2D vector to 0
-void zeroVector2(std::vector< std::vector<int> > &v) {
-    for (int i=0; i<v.size(); i++) {
-        std::fill(v[i].begin(), v[i].end(), 0);
+//uses template so it's a bit easier for custom vectors
+template <typename T>
+inline void zeroVector2(std::vector< std::vector<T> > &v, T const& zero) {
+    for (unsigned int i=0; i<v.size(); i++) {
+        std::fill(v[i].begin(), v[i].end(), zero);
     }
 }
 
@@ -274,70 +279,86 @@ void MandelbrotViewer::generate() {
         } else done = true;
     }
 */
+
     start = std::clock();
+    
+    // Clear arrays
+    border_queue.clear();
+    plus_queue.clear();
+    plus_to_write.clear();
 
-    //zero the writtable arrays
-    zeroVector2(border_array);
-    zeroVector2(fill_array);
-
-    //reset # of waiting threads to 0
-    waiting_threads = 0;
-    wakeups = 0;
-
-    //generate the border
-    for (int y=0; y<res_height; y++) {
-        border_array[y][0] = escape(y, 0);
-        border_array[y][res_width-1] = escape(y, res_width-1);
+    // Generate the outer border of the image
+    generateOutside();
+    // Make sure we have something for the master to start checking
+    {
+        EmptySquare wholeImage;
+        wholeImage.min_x = 0;
+        wholeImage.min_y = 0;
+        wholeImage.max_x = res_width-1;
+        wholeImage.max_y = res_height-1;
+        border_queue.push_back(wholeImage);
     }
-    for (int x=0; x<res_width; x++) {
-        border_array[0][x] = escape(0, x);
-        border_array[res_height-1][x] = escape(res_height-1, x);
-    }
 
-    //create and launch the thread pool
+    genDone = false;
+    running_slaves = 0;
+    // Create and launch the thread pool
     std::vector<std::thread> threadPool;
     for (int i=0; i<max_threads; i++) {
-        if (i == 0)
-            threadPool.push_back(std::thread(&MandelbrotViewer::quadTreeWorker, this, true));
-        else
-            threadPool.push_back(std::thread(&MandelbrotViewer::quadTreeWorker, this, false));
+        threadPool.push_back(std::thread(&MandelbrotViewer::slave_genPlus, this));
     }
 
-    //wait for the threads to finish
+    // Start searching to make sure that everything is generated
+    while (!genDone) {
+        printf("Starting loop!\t");
+        genDone = true;
+        // TODO: *Something* is going to break somewhere. No idea what yet
+
+        // Write all the pluses
+        plus_to_write_mutex.lock();
+      //  printf("Pluses: %u\t",plus_to_write.size());
+        for (unsigned int i=0; i<plus_to_write.size(); i++) {
+            Plus temp = plus_to_write.back();
+            plus_to_write.pop_back();
+
+            master_write_plus(temp);
+            master_push_empty(temp);
+            genDone = false;
+        }
+        plus_to_write_mutex.unlock();
+
+        // Check if there's any already in the checking vector
+       // printf("Master: %u\t",border_queue.size());
+        if (border_queue.size() != 0) {
+            genDone = false;
+
+            EmptySquare sqr = border_queue[0];
+            border_queue.erase(border_queue.begin(),border_queue.begin()+1);
+            
+            // Check the border
+            if ( master_checkBorder(sqr) ) {
+                master_fillSquare(sqr);
+            } else {
+                plus_queue_mutex.lock();
+                plus_queue.push_back(sqr);
+                plus_queue_mutex.unlock();
+            }
+        }
+
+        // Check how many slaves are running
+//        printf("Slaves: %u\n",unsigned(running_slaves));
+        if (running_slaves != 0)
+            genDone = false;
+    }
+    printf("Done with loop\n");
+
+    // Wait for threads to finish
     for (int i=0; i<max_threads; i++) {
         threadPool[i].join();
     }
 
-    //combine border_array and fill_array into iter_array
-    for (int row=0; row<res_height; row++) {
-        for (int column=0; column<res_width; column++) {
-            if (border_array[row][column])
-                iter_array[row][column] = border_array[row][column];
-            else if (fill_array[row][column])
-                iter_array[row][column] = fill_array[row][column];
-        }
-    }
-
-    //write the image using iter_array
-    if (!skeleton) {
-        for (int row=0; row<res_height; row++) {
-            for (int column=0; column<res_width; column++) {
-                image.setPixel(column, row, findColor(iter_array[row][column]));
-            }
-        }
-     } else {
-         for (int row=0; row<res_height; row++) {
-             for (int column=0; column<res_width; column++) {
-                 image.setPixel(column, row, findColor(border_array[row][column]));
-             }
-         }
-     }
-    std::cout << "wakeups: " << wakeups << std::endl;
-
-    std::cout << "time elapsed: " << (std::clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
-
     //reset last_max_iter to the new max_iter
     last_max_iter = max_iter;
+
 }
 
 struct Square {
@@ -397,7 +418,6 @@ void MandelbrotViewer::quadTreeWorker(bool start) {
 //has the same # of iterations, it fills it in. If not, it splits it into four squares and
 //recursively calls itself to check each of the smaller squares
 void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
-
     //shared mutex for reading border_array
     border_mutex.lock_shared();
     int reference = border_array[y_min][x_min];
@@ -517,6 +537,169 @@ void MandelbrotViewer::genSquare(int x_min, int x_max, int y_min, int y_max) {
 
         //bottom right square
         genSquare(x_mean, x_max, y_mean, y_max);
+    }
+}
+
+std::vector< std::vector<int> > MandelbrotViewer::master_generateBorder(const EmptySquare &square) {
+    int min_x = square.min_x,
+        max_x = square.max_x,
+        min_y = square.min_y,
+        max_y = square.max_y;
+
+    std::vector< std::vector<int> > ret;
+    for (int i=0; i<res_height; i++) {
+        std::vector<int> temp (res_width, 0);
+        ret.push_back(temp);
+    }
+
+    // Horizontal sides
+    for (int i=min_x; i<max_x; i++) {
+        ret[min_y][i] = escape(min_y,i);
+        ret[max_y][i] = escape(max_y,i);
+    }
+    // Vertical sides
+    for (int i=min_y+1; i<max_y-1; i++) {
+        ret[i][min_x] = escape(i,min_x);
+        ret[i][max_x] = escape(i,max_x);
+    }
+
+    printf("Generated border\n");
+
+    return ret;
+}
+void MandelbrotViewer::generateOutside() {
+    //Create the entire outer border for use with quadtree
+
+    // Horizontal sides
+    for (int i=0; i<res_width; i++) {
+        iter_array[0][i]            = escape(0           , i);
+        iter_array[res_height-1][i] = escape(res_height-1, i);
+    }
+    // Vertical sides
+    for (int i=0; i<res_height; i++) {
+        iter_array[i][0]            = escape(i,           0);
+        iter_array[i][res_width-1]  = escape(i, res_width-1);
+    }
+
+    printf("Done generating outside!\n");
+    saveImage();
+    printf("Saved!\n");
+}
+void MandelbrotViewer::slave_genPlus() {
+    while (!genDone) {
+        Plus temp;
+
+        EmptySquare sqr;
+        plus_queue_mutex.lock();
+        running_slaves++;
+        if (plus_queue.size() != 0) {
+            sqr = plus_queue.back();
+            plus_queue.pop_back();
+            printf("Starting! %-4d,%-4d to %-4d,%-4d\n",sqr.min_x,sqr.min_y,sqr.max_x,sqr.max_y);
+        } else {
+            running_slaves--;
+            plus_queue_mutex.unlock();
+            continue;
+        }
+        plus_queue_mutex.unlock();
+
+        // Copy data into Plus
+        temp.min_x = sqr.min_x;
+        temp.max_x = sqr.max_x;
+        temp.min_y = sqr.min_y;
+        temp.max_y = sqr.max_y;
+
+        int mid_x = (sqr.max_x - sqr.min_x)/2 + sqr.min_x,
+            mid_y = (sqr.max_y - sqr.min_y)/2 + sqr.min_y;
+        temp.mid_x = mid_x;
+        temp.mid_y = mid_y;
+        // Generate vertical part
+        for (int i=sqr.min_y+1; i<sqr.max_y; i++) {
+            temp.vertical.push_back( escape(i,mid_x) );
+            printf("V\tX,Y: (%-5i,%-5i)\tIter: %i\tMaxIter: %i\n",mid_x,i,temp.vertical.back(),max_iter);
+        }
+        // Generate horizontal part
+        for (int i=sqr.min_x+1; i<sqr.max_x; i++) {
+            temp.horizontal.push_back( escape(mid_y,i) );
+            printf("H\tX,Y: (%-5i,%-5i)\tIter: %i\tMaxIter: %i\n",i,mid_y,temp.vertical.back(),max_iter);
+        }
+
+        plus_to_write_mutex.lock();
+        plus_to_write.push_back(temp);
+        plus_to_write_mutex.unlock();
+
+        running_slaves--;
+    }
+}
+// Split a square along the plus and put it into the master_empty_square
+void MandelbrotViewer::master_push_empty(const Plus &plus) {
+    EmptySquare temp;
+
+    // Top left
+    temp.min_x = plus.min_x;
+    temp.min_y = plus.min_y;
+    temp.max_x = plus.mid_x;
+    temp.max_y = plus.mid_y;
+    border_queue.push_back(temp);
+
+    // Top right
+    temp.min_x = plus.mid_x;
+    temp.max_x = plus.max_x;
+    border_queue.push_back(temp);
+
+    // Bottom right
+    temp.min_y = plus.mid_y;
+    temp.max_y = plus.max_y;
+    border_queue.push_back(temp);
+
+    // Bottom left
+    temp.min_x = plus.min_x;
+    temp.max_x = plus.mid_x;
+    border_queue.push_back(temp);
+    printf("Pushed to border_queue!\n");
+}
+bool MandelbrotViewer::master_checkBorder(const EmptySquare &square) {
+    // Check if region too thin
+    if (square.max_x - square.min_x < 3 || square.max_y - square.min_y < 3) {
+        printf("Pushing to border queue!\n");
+        border_queue.push_back(square);
+        return true;
+    }
+
+    int initial = iter_array[square.min_x][square.min_y];
+    // Check the top and bottom
+    for (int i=square.min_x; i<=square.max_x; i++) {
+        if (iter_array[square.min_y][i] != initial)
+            return false;
+        if (iter_array[square.max_y][i] != initial)
+            return false;
+    }
+    // Check the left and right
+    for (int i=square.min_y; i<=square.max_y; i++) {
+        if (iter_array[i][square.min_x] != initial)
+            return false;
+        if (iter_array[i][square.max_x] != initial)
+            return false;
+    }
+
+    return true;
+}
+void MandelbrotViewer::master_fillSquare(const EmptySquare &map) {
+    int val = iter_array[map.min_y][map.min_x];
+    for (int i=map.min_x+1; i<map.max_x-1; i++) {
+        for (int j=map.min_y+1; j<map.max_y-1; j++) {
+            iter_array[j][i] = val;
+        }
+    }
+}
+void MandelbrotViewer::master_write_plus(const Plus &plus) {
+    // Write the vertical part
+    for (unsigned int i=0; i<plus.vertical.size(); i++) {
+        iter_array[i+plus.min_y+1][plus.mid_x] = plus.vertical[i];
+    }
+    // Write horizontal
+    for (unsigned int i=0; i<plus.horizontal.size(); i++) {
+        iter_array[plus.mid_y][i+plus.min_x+1] = plus.horizontal[i];
     }
 }
 
@@ -685,6 +868,7 @@ int MandelbrotViewer::escape(int row, int column) {
         //convert from pixel to complex coordinates
         sf::Vector2f pnt(column, row);
         sf::Vector2<double> point = pixelToComplex(pnt);
+//        printf("Point: (%-2.10f,%-2.10f)\t",point.x,point.y);
         
         //rotate the point
         if (rotation) point = rotate(point);
@@ -707,9 +891,12 @@ int MandelbrotViewer::escape(int row, int column) {
             y_square = y*y;
 
             //if the magnitude is greater than 2, it will escape
-            if (x_square + y_square > 4.0) return iter;
+            if (x_square + y_square > 4.0) {
+//                printf("Iter: %-4d\n",iter);
+                return iter;}
         }
     }
+//    printf("Iter: %-4d\n",max_iter);
     return max_iter;
 }
 
