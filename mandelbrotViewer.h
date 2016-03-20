@@ -3,12 +3,22 @@
 
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include <atomic>
+#include <mutex>
 
 struct Color {
     int r;
     int g;
     int b;
 };
+// Quadtree structs
+struct Square {
+    int min_x, max_x, min_y, max_y; // Inclusive, outer border will already be written
+};
+struct Plus : Square {
+    int mid_x, mid_y;
+};
+// End Quadtree structs
 
 class MandelbrotViewer {
     public:
@@ -136,6 +146,26 @@ class MandelbrotViewer {
         std::vector< std::vector<int> > palette;
         void initPalette();
         void smoosh(sf::Color c1, sf::Color c2, float min, float max);
+
+        //******************************************************************************
+        // N Stuff
+        std::atomic< bool   > quadtree_done;  // Master turns on to kill all Slaves when finished generating
+        std::atomic< int    > numberOfThreads;
+        std::vector< Square > squaresToCheck; // Master checks the boxes and puts them into squaresToSplit if needed
+        std::vector< Square > squaresToWrite; // Master temp for writing after putting everything into squaresToSplit
+        std::vector< Square > squaresToSplit; // Slaves need to split these and put them into plusToWrite
+        std::vector< Plus   > plusToWrite;    // Slaves generate the pluses for Master
+
+        std::mutex mutex_squaresToCheck;
+        std::mutex mutex_squaresToSplit;
+        std::mutex mutex_plusToWrite;
+
+        int quadtree_createOutsideImage();    // Create the outside of the image to start the checks
+
+        int quadtree_master();
+        int quadtree_slave();
+        // End N Stuff
+        //******************************************************************************
 };
 
 #endif

@@ -609,3 +609,79 @@ void MandelbrotViewer::smoosh(sf::Color c1, sf::Color c2, float min_per, float m
         palette[2][min+i] = (int) (c1.b + i * b_inc);
     }
 }
+
+// N Stuff
+int MandelbrotViewer::quadtree_createOutsideImage() {
+    // Generate horizontal lines of image
+    int iter1, iter2;
+    for (int i=0; i<res_width; i++) {
+        iter1 = escape(0, i);
+        image.setPixel(i, 0, findColor(iter1));
+        image_array[0][i] = iter1;
+
+        iter2 = escape(res_height-1, i);
+        image.setPixel(i, res_height-1, findColor(iter2));
+        image_array[res_height-1][i] = iter2;
+    }
+    // Generate vertical lines of image
+    for (int i=1; i<res_height-1; i++) {
+        iter1 = escape(i, 0);
+        image.setPixel(0, i, findColor(iter1));
+        image_array[i][0] = iter1;
+
+        iter2 = escape(i, res_width-1);
+        image.setPixel(res_width-1, i, findColor(iter2));
+        image_array[i][res_width-1] = iter2;
+    }
+
+    // Create first square to check
+    Square firstSquare; // Outer edge of image
+    firstSquare.min_x = 0;
+    firstSquare.min_y = 0;
+    firstSquare.max_x = res_width-1;
+    firstSquare.max_y = res_height-1;
+    squaresToCheck.push_back(firstSquare);
+}
+int MandelbrotViewer::quadtree_master() {
+    // Zero all the working variables
+    plusToWrite.clear();
+    squaresToWrite.clear();
+    squaresToCheck.clear();
+    squaresToSplit.clear();
+    numberOfThreads.store(0);
+    quadtree_done.store(false);
+    // Generate the outer edge
+    quadtree_createOutsideImage();
+
+    // Create all of the slave threads
+    std::vector<std::thread> threadPool;
+    for (int i=0; i<max_threads; i++) {
+        threadPool.push_back(std::thread(&MandelbrotViewer::quadtree_slave, this));
+    }
+
+    while (squaresToCheck.size() != 0 || squaresToWrite.size() != 0 || plusToWrite.size() != 0 || numberOfThreads.load() != 0) {
+        // squaresToCheck?
+
+        // squaresToWrite?
+
+        // plusToWrite?
+    }
+    quadtree_done.store(true);
+
+    // Join all the threads in the pool
+    for (int i=0; i<max_threads; i++) {
+        threadPool[i].join();
+    }
+}
+int MandelbrotViewer::quadtree_slave() {
+    while (!quadtree_done.load()) {
+        // squaresToSplit?
+        if (squaresToSplit.size() != 0) {
+            numberOfThreads++;
+            
+
+            numberOfThreads--;
+        }
+    }
+}
+// End N Stuff
