@@ -386,7 +386,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
                         "Home              - Reset rotation\n"
                         "------------------------------------------------\n");
         controls.setCharacterSize(24);
-        controls.setColor(sf::Color::White);
+        controls.setFillColor(sf::Color::White);
         controls.setPosition(40, 20);
 
         //set up the stats part
