@@ -34,7 +34,7 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
 
     //initialize the image
     texture.create(res_width, res_height);
-    image.create(res_width, res_height, sf::Color::Black);
+    image.create(res_width, res_height, sf::Color::White);
     sprite.setTexture(texture);
     scheme = 1;
     
@@ -60,7 +60,9 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     image_array = array;
 
     //get the number of supported concurrent threads
-    max_threads = std::thread::hardware_concurrency();
+    // TODO change this back
+    //max_threads = std::thread::hardware_concurrency();
+    max_threads = 1;
 
     //disable repeated keys
     //window->setKeyRepeatEnabled(false);
@@ -70,6 +72,16 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
 
 MandelbrotViewer::~MandelbrotViewer() { }
 
+//random useful functions
+
+//reset all elements of a 2D vector to 0
+//uses template so it's a bit easier for custom vectors
+template <typename T>
+inline void zeroVector2(std::vector< std::vector<T> > &v, T const& zero) {
+    for (unsigned int i=0; i<v.size(); i++) {
+        std::fill(v[i].begin(), v[i].end(), zero);
+    }
+}
 //Accessors
 sf::Vector2i MandelbrotViewer::getMousePosition() {
     return sf::Mouse::getPosition(*window);
@@ -175,6 +187,7 @@ void MandelbrotViewer::changePos(sf::Vector2<double> new_center, double zoom_fac
     area.height = area.height * zoom_factor;
     area.left = new_center.x - area.width / 2.0;
     area.top = new_center.y - area.height / 2.0;
+    area_inc = area.width/res_width;
     //NOTE: this is a relative zoom
 }
 
@@ -195,16 +208,16 @@ void MandelbrotViewer::resizeWindow(int new_x, int new_y) {
     //save the old center and resolution
     double center_x = area.left + area.width/2.0;
     double center_y = area.top + area.height/2.0;
-    double inc = area.width/res_width;
 
     res_width = new_x;
     res_height = new_y;
 
     //calculate the new area
-    area.width = inc * res_width;
-    area.height = inc * res_height;
+    area.width = area_inc * res_width;
+    area.height = area_inc * res_height;
     area.left = center_x - area.width/2.0;
     area.top = center_y - area.height/2.0;
+    area_inc = area.width/res_width;
 
     //resize the image, texture, and sprite
     image.create(res_width, res_height, sf::Color::Black);
@@ -230,9 +243,8 @@ void MandelbrotViewer::generate() {
     while (!done) {
         //make sure it starts at line 0
         nextLine = 0;
-        finished_threads = 0;
 
-        //create the thread pool
+        //create and launch the thread pool
         std::vector<std::thread> threadPool;
         for (int i=0; i<max_threads; i++) {
             threadPool.push_back(std::thread(&MandelbrotViewer::genLine, this));
@@ -272,28 +284,11 @@ void MandelbrotViewer::genLine() {
         row = nextLine++; //get the next ungenerated line
         mutex1.unlock();
 
-        //stop generating if it has reached the last row or has been
-        //signaled to stop
-        if (row >= res_height || restart_gen) return;
+        //return when it finishes the last row
+        if (row >= res_height) break;
 
-        //calculate the row height in the complex plane
-        point.y = area.top + row * y_inc;
-
-        //now loop through and generate all the pixels in that row
         for (column = 0; column < res_width; column++) {
-
-            //check if we increased iterations and if the pixel already diverged
-            if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) {
-                iter = image_array[row][column];
-            } //check if we decreased iterations and if the pixel already converged
-            else if (last_max_iter > max_iter && image_array[row][column] > max_iter) {
-                iter = image_array[row][column];
-            } //check if we zoomed or didn't change iterations
-            else {
-                //calculate the next x coordinate of the complex plane
-                point.x = area.left + column * x_inc;
-                iter = escape(point);
-            }
+            iter = escape(row, column);
 
             //mutex this too so that the image is not accessed multiple times simultaneously
             mutex2.lock();
@@ -310,8 +305,8 @@ void MandelbrotViewer::genLine() {
 void MandelbrotViewer::resetMandelbrot() {
     area.top = -1;
     area.height = 2;
-    double inc = area.height/res_height;
-    area.width = inc * res_width;
+    area_inc = area.height/res_height;
+    area.width = area_inc * res_width;
     area.left = -0.5 - area.width/2.0;
 
     max_iter = 100;
@@ -324,7 +319,7 @@ void MandelbrotViewer::resetMandelbrot() {
 
 //refreshes the window: clear, draw, display
 void MandelbrotViewer::refreshWindow() {
-    window->clear(sf::Color::Black);
+    window->clear(sf::Color::White);
     window->setView(*view);
     window->draw(sprite);
     window->display();
@@ -442,34 +437,41 @@ void MandelbrotViewer::rotateView(float angle) {
 //coordinates on the complex plane
 sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
     sf::Vector2<double> comp;
-    comp.x = area.left + pix.x * interpolate(area.width, res_width);
-    comp.y = area.top + pix.y * interpolate(area.height, res_height);
+    comp.x = area.left + pix.x * area_inc;
+    comp.y = area.top + pix.y * area_inc;
     return comp;
 }
 
 //this function calculates the escape-time of the given coordinate
 //it is the brain of the mandelbrot program: it does the work to
 //make the pretty pictures :)
-int MandelbrotViewer::escape(sf::Vector2<double> point) {
-    
-    //rotate the point first
-    point = rotate(point);
+int MandelbrotViewer::escape(int row, int column) {
 
-    double x = 0, y = 0, x_check = 0, y_check = 0;
-    int iter = 0, period = 2;
+    //check if we increased iterations and if the pixel already diverged
+    if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) 
+        return image_array[row][column];
+    //check if we decreased iterations and if the pixel already converged
+    else if (last_max_iter > max_iter && image_array[row][column] > max_iter)
+        return image_array[row][column];
+    //if not, use the escape-time algorithm to calculate iter
+    else {
+        //convert from pixel to complex coordinates
+        sf::Vector2f pnt(column, row);
+        sf::Vector2<double> point = pixelToComplex(pnt);
+        //        printf("Point: (%-2.10f,%-2.10f)\t",point.x,point.y);
 
-    double x_square = 0;
-    double y_square = 0;
+        //rotate the point
+        if (rotation) point = rotate(point);
 
-    //this is a specialized version of z = z^2 + c. It only does three multiplications,
-    //instead of the normal six. Multplications are very costly with such high precision
-    while(period < max_iter) {
-        x_check = x;
-        y_check = y;
-        period += period;
+        double x = 0, y = 0;
+        int iter = 0;
 
-        if (period > max_iter) period = max_iter;
-        for (; iter < period; iter++) {
+        double x_square = 0;
+        double y_square = 0;
+
+        //this is a specialized version of z = z^2 + c. It only does three multiplications,
+        //instead of the normal six. Multplications are very costly with such high precision
+        for (; iter < max_iter; iter++) {
             y = x * y;
             y += y; //multiply by two
             y += point.y;
@@ -480,12 +482,6 @@ int MandelbrotViewer::escape(sf::Vector2<double> point) {
 
             //if the magnitude is greater than 2, it will escape
             if (x_square + y_square > 4.0) return iter;
-
-            //another optimization: it checks if the new 'z' is a repeat. If so,
-            //it knows that it is in a loop and will not escape
-            if ((x == x_check) && (y == y_check)){
-                return max_iter;
-            }
         }
     }
     return max_iter;
@@ -496,7 +492,9 @@ sf::Color MandelbrotViewer::findColor(int iter) {
     int i = (int) fmod(iter * color_multiple, palette[0].size());
     sf::Color color;
     if (iter >= max_iter) color = sf::Color::Black;
-    else {
+    else if (iter == 0) {
+        color = sf::Color::White;
+    } else {
         color.r = palette[0][i];
         color.g = palette[1][i];
         color.b = palette[2][i];

@@ -73,7 +73,6 @@ class MandelbrotViewer {
         int res_width;
         int framerateLimit;
         int nextLine;
-        int finished_threads;
 
         sf::Sprite sprite;
         sf::Image image;
@@ -87,9 +86,10 @@ class MandelbrotViewer {
 
         //Parameters to generate the mandelbrot:
         bool restart_gen; //set to true to stop generation before it's finished
-        
+
         //this is the area of the complex plane to generate
         sf::Rect<double> area;
+        double area_inc; //this is complex plane area per pixel
 
         //this is the current rotation of the mandelbrot - 0 radians is positive x axis
         double rotation;
@@ -118,7 +118,7 @@ class MandelbrotViewer {
         double interpolate(double length, int range) {return length/range;}
 
         //escape calculates the escape-time of given point of the mandelbrot
-        int escape(sf::Vector2<double> point);
+        int escape(int row, int column);
 
         //genLine is a function for worker threads: it generates the next line of the
         //mandelbrot, then moves onto the next, until the entire mandelbrot is generated
