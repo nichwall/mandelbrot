@@ -625,10 +625,25 @@ template <typename T>
 template <typename T>
     inline T MandelbrotViewer::vector_get(std::vector<T> &r_vector, std::mutex &r_mutex) {
         r_mutex.lock();
-        T ret = r_vector[r_vector.size()-1];
-        r_vector.pop_back();
-        r_mutex.unlock();
-        return ret;
+        if (r_vector.size() != 0) {
+            T ret = r_vector[r_vector.size()-1];
+            r_vector.pop_back();
+            r_mutex.unlock();
+            return ret;
+        }
+    }
+template <typename T>
+    inline T MandelbrotViewer::vector_get(std::vector<T> &r_vector, std::mutex &r_mutex, bool &r_failed) {
+        r_mutex.lock();
+        if (r_vector.size() != 0) {
+            T ret = r_vector[r_vector.size()-1];
+            r_vector.pop_back();
+            r_mutex.unlock();
+            r_failed = false;
+            return ret;
+        } else {
+            r_failed = true;
+        }
     }
 template <typename T>
     inline int MandelbrotViewer::vector_size(std::vector<T> &r_vector, std::mutex &r_mutex) {
@@ -666,6 +681,7 @@ void MandelbrotViewer::quadtree_createOutsideImage() {
     firstSquare.min_y = 0;
     firstSquare.max_x = res_width-1;
     firstSquare.max_y = res_height-1;
+    printf("First Square dimensions\tX: (%3d,%3d)\tY:(%3d,%3d)\n",firstSquare.min_x,firstSquare.max_x,firstSquare.min_y,firstSquare.max_y);
     squaresToCheck.push_back(firstSquare);
 }
 bool MandelbrotViewer::quadtree_masterDone() {
@@ -772,47 +788,60 @@ void MandelbrotViewer::quadtree_master() {
     // Generate the outer edge
     quadtree_createOutsideImage();
 
+    printf("Created outside image\tNumber of squares to check: %d\n",squaresToCheck.size());
+
     // Create all of the slave threads
     std::vector<std::thread> threadPool;
     for (unsigned int i=0; i<max_threads; i++) {
         threadPool.push_back(std::thread(&MandelbrotViewer::quadtree_slave, this));
     }
 
-    while ( quadtree_masterDone() ) {
+    quadtree_done.store(false);
+    while ( !quadtree_done.load() ) {
+        printf("Not done!\t\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
         // Write all the pluses, or maximum 10
         // TODO Check if we actually want to have the max of 10, or just let the algorithm limit itself
         unsigned char count = 0;
         while (count < 10 && vector_size(plusToWrite, mutex_plusToWrite) != 0) {
             Plus plus = vector_get(plusToWrite, mutex_plusToWrite);
             quadtree_writePlus(plus);
-            count++;
+//            count++;
         }
+        printf("Wrote plusses\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
         // Check all of the squares in the vector
         while ( squaresToCheck.size() != 0 ) {
             Square square = vector_get(squaresToCheck, mutex_squaresToCheck);
             quadtree_checkSquare(square);
         }
+        printf("Checked square\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
         // Write all the squares in the vector
         while ( squaresToWrite.size() != 0 ) {
             Square square = vector_get(squaresToWrite, mutex_squaresToWrite);
             quadtree_writeSquare(square);
         }
+        printf("Wrote squares\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
+        quadtree_done.store(quadtree_masterDone());
+        printf("\n");
     }
-    quadtree_done.store(true);
 
     // Join all the threads in the pool
     for (unsigned int i=0; i<max_threads; i++) {
         threadPool[i].join();
     }
+    saveImage();
 }
 void MandelbrotViewer::quadtree_slave() {
     while (!quadtree_done.load()) {
-        // squaresToSplit?
         if ( vector_size(squaresToSplit, mutex_squaresToSplit) != 0) {
             numberOfThreads++;
 
-            Square square = vector_get(squaresToSplit, mutex_squaresToSplit); 
-            quadtree_splitSquare(square);
+            printf("Length before pop: %d\n", vector_get(squaresToSplit, mutex_squaresToSplit));
+            bool failed = false;
+            Square square = vector_get(squaresToSplit, mutex_squaresToSplit, failed);
+            printf("Length after pop: %d\n", vector_get(squaresToSplit, mutex_squaresToSplit));
+            if (!failed) {
+                quadtree_splitSquare(square);
+            }
 
             numberOfThreads--;
         }

@@ -13,6 +13,7 @@ struct Color {
 };
 // Quadtree structs
 struct Square {
+    bool bad;
     unsigned int min_x, max_x, min_y, max_y; // Inclusive, outer border will already be written
 };
 struct Plus : Square {
@@ -168,6 +169,8 @@ class MandelbrotViewer {
             void vector_put(std::vector<T> &r_vector, std::mutex &r_mutex, const T &r_value);
         template <typename T>
             T vector_get(std::vector<T> &r_vector, std::mutex &r_mutex);
+        template <typename T>
+            T vector_get(std::vector<T> &r_vector, std::mutex &r_mutex, bool &r_failed);
         template <typename T>
             int vector_size(std::vector<T> &r_vector, std::mutex &r_mutex);
 
