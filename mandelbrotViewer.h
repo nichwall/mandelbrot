@@ -13,10 +13,12 @@ struct Color {
 };
 // Quadtree structs
 struct Square {
-    int min_x, max_x, min_y, max_y; // Inclusive, outer border will already be written
+    unsigned int min_x, max_x, min_y, max_y; // Inclusive, outer border will already be written
 };
 struct Plus : Square {
-    int mid_x, mid_y;
+    unsigned int mid_x, mid_y;
+    std::vector<unsigned int> vertical,
+                              horizontal;
 };
 // End Quadtree structs
 
@@ -157,13 +159,28 @@ class MandelbrotViewer {
         std::vector< Plus   > plusToWrite;    // Slaves generate the pluses for Master
 
         std::mutex mutex_squaresToCheck;
+        std::mutex mutex_squaresToWrite;
         std::mutex mutex_squaresToSplit;
         std::mutex mutex_plusToWrite;
 
-        int quadtree_createOutsideImage();    // Create the outside of the image to start the checks
+        // Mutexed vector functions
+        template <typename T>
+            void vector_put(std::vector<T> &r_vector, std::mutex &r_mutex, const T &r_value);
+        template <typename T>
+            T vector_get(std::vector<T> &r_vector, std::mutex &r_mutex);
+        template <typename T>
+            int vector_size(std::vector<T> &r_vector, std::mutex &r_mutex);
 
-        int quadtree_master();
-        int quadtree_slave();
+        void quadtree_createOutsideImage();    // Create the outside of the image to start the checks
+
+        bool quadtree_masterDone();  // Call to maintain thread safety, check if master should stop
+        void quadtree_writePlus(Plus &r_plus);       // Master calls to write a plus.   Threadsafe
+        void quadtree_checkSquare(Square &r_square); // Master calls to check a square.
+        void quadtree_writeSquare(Square &r_square); // Master calls to fill a square.  Threadsafe
+        void quadtree_splitSquare(Square &r_square); // Slave  calls to split a square.
+
+        void quadtree_master();
+        void quadtree_slave();
         // End N Stuff
         //******************************************************************************
 };
