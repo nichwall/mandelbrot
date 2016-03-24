@@ -13,7 +13,6 @@ struct Color {
 };
 // Quadtree structs
 struct Square {
-    bool bad;
     unsigned int min_x, max_x, min_y, max_y; // Inclusive, outer border will already be written
 };
 struct Plus : Square {

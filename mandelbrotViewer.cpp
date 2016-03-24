@@ -451,7 +451,7 @@ sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
 //it is the brain of the mandelbrot program: it does the work to
 //make the pretty pictures :)
 int MandelbrotViewer::escape(int row, int column) {
-
+/*
     //check if we increased iterations and if the pixel already diverged
     if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) 
         return image_array[row][column];
@@ -460,6 +460,7 @@ int MandelbrotViewer::escape(int row, int column) {
         return image_array[row][column];
     //if not, use the escape-time algorithm to calculate iter
     else {
+*/
         //convert from pixel to complex coordinates
         sf::Vector2f pnt(column, row);
         sf::Vector2<double> point = pixelToComplex(pnt);
@@ -488,7 +489,7 @@ int MandelbrotViewer::escape(int row, int column) {
             //if the magnitude is greater than 2, it will escape
             if (x_square + y_square > 4.0) return iter;
         }
-    }
+//    }
     return max_iter;
 }
 
@@ -694,11 +695,11 @@ bool MandelbrotViewer::quadtree_masterDone() {
 void MandelbrotViewer::quadtree_writePlus(Plus &r_plus) {
     // Write the vertical line
     for (unsigned int i=0; i<r_plus.vertical.size(); i++) {
-        image_array[r_plus.min_y+i][r_plus.mid_x] = r_plus.vertical[i];
+        image_array[r_plus.min_y+i+1][r_plus.mid_x] = r_plus.vertical[i];
     }
     // Write the horizontal line
     for (unsigned int i=0; i<r_plus.horizontal.size(); i++) {
-        image_array[r_plus.mid_y][r_plus.min_x+i] = r_plus.horizontal[i];
+        image_array[r_plus.mid_y][r_plus.min_x+i+1] = r_plus.horizontal[i];
     }
 
     // Create the new squares to check
@@ -722,6 +723,12 @@ void MandelbrotViewer::quadtree_writePlus(Plus &r_plus) {
     vector_put(squaresToCheck, mutex_squaresToCheck, temp);
 }
 void MandelbrotViewer::quadtree_checkSquare(Square &r_square) {
+    // Check whether too small
+    if (r_square.max_x - r_square.min_x < 2)
+        return;
+    if (r_square.max_y - r_square.min_y < 2)
+        return;
+
     bool toSplit = false;
     int iterCount = image_array[r_square.min_y][r_square.min_x];
     // Check horizontal borders
@@ -767,11 +774,11 @@ void MandelbrotViewer::quadtree_splitSquare(Square &r_square) {
 
     // Create the vectors of the points
     // Vertical
-    for (unsigned int i = plus.min_y; i < plus.max_y; i++) {
+    for (unsigned int i = plus.min_y+1; i < plus.max_y; i++) {
         plus.vertical.push_back(escape(i, plus.mid_x));
     }
     // Horizontal
-    for (unsigned int i = plus.min_x; i < plus.max_x; i++) {
+    for (unsigned int i = plus.min_x+1; i < plus.max_x; i++) {
         plus.horizontal.push_back(escape(plus.mid_y, i));
     }
 
@@ -797,53 +804,72 @@ void MandelbrotViewer::quadtree_master() {
     }
 
     quadtree_done.store(false);
+    Plus plus;
+    Square square;
     while ( !quadtree_done.load() ) {
-        printf("Not done!\t\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
-        // Write all the pluses, or maximum 10
-        // TODO Check if we actually want to have the max of 10, or just let the algorithm limit itself
-        unsigned char count = 0;
-        while (count < 10 && vector_size(plusToWrite, mutex_plusToWrite) != 0) {
-            Plus plus = vector_get(plusToWrite, mutex_plusToWrite);
-            quadtree_writePlus(plus);
-//            count++;
+        //printf("Not done!\t\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
+
+        // Write all the pluses
+        bool failed = false;
+        while (vector_size(plusToWrite, mutex_plusToWrite) != 0) {
+            plus = vector_get(plusToWrite, mutex_plusToWrite, failed);
+            if (!failed)
+                quadtree_writePlus(plus);
+            else
+                printf("Oopsie daisie\n");
         }
-        printf("Wrote plusses\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
         // Check all of the squares in the vector
         while ( squaresToCheck.size() != 0 ) {
-            Square square = vector_get(squaresToCheck, mutex_squaresToCheck);
-            quadtree_checkSquare(square);
+            square = squaresToCheck[squaresToCheck.size()-1];
+            squaresToCheck.pop_back();
+            if (!failed)
+                quadtree_checkSquare(square);
         }
-        printf("Checked square\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
         // Write all the squares in the vector
         while ( squaresToWrite.size() != 0 ) {
-            Square square = vector_get(squaresToWrite, mutex_squaresToWrite);
-            quadtree_writeSquare(square);
+            square = squaresToWrite[squaresToWrite.size()-1];
+            squaresToWrite.pop_back();
+            if (!failed)
+                quadtree_writeSquare(square);
         }
-        printf("Wrote squares\tSquares to check: %d\tSquares to write: %d\tSquares to split: %d\tPlus to write: %d\tRunning thredas: %d\n",vector_size(squaresToCheck, mutex_squaresToCheck),vector_size(squaresToWrite, mutex_squaresToWrite),vector_size(squaresToSplit, mutex_squaresToSplit), vector_size(plusToWrite, mutex_plusToWrite), numberOfThreads.load());
         quadtree_done.store(quadtree_masterDone());
-        printf("\n");
+        //printf("\n");
     }
 
     // Join all the threads in the pool
     for (unsigned int i=0; i<max_threads; i++) {
         threadPool[i].join();
     }
+    
+    for (unsigned int i=0; i<res_width; i++) {
+        for (unsigned int j=0; j<res_height; j++) {
+            image.setPixel(i, j, findColor(image_array[j][i]));
+        }
+    }
+
     saveImage();
 }
 void MandelbrotViewer::quadtree_slave() {
+    bool failed;
+    Square square;
     while (!quadtree_done.load()) {
+        //printf("In slave\n");
         if ( vector_size(squaresToSplit, mutex_squaresToSplit) != 0) {
             numberOfThreads++;
 
-            printf("Length before pop: %d\n", vector_get(squaresToSplit, mutex_squaresToSplit));
-            bool failed = false;
-            Square square = vector_get(squaresToSplit, mutex_squaresToSplit, failed);
-            printf("Length after pop: %d\n", vector_get(squaresToSplit, mutex_squaresToSplit));
+            //printf("Length before pop: %d\n", vector_size(squaresToSplit, mutex_squaresToSplit));
+            failed = false;
+            square = vector_get(squaresToSplit, mutex_squaresToSplit, failed);
+            //printf("Length after pop: %d\n", vector_size(squaresToSplit, mutex_squaresToSplit));
             if (!failed) {
+                //printf("About to split\n");
                 quadtree_splitSquare(square);
+                //printf("Split\n");
             }
 
+            //printf("Pre subtract\n");
             numberOfThreads--;
+            //printf("Post subtract\n");
         }
     }
 }
