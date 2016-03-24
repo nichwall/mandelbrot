@@ -32,7 +32,7 @@ class MandelbrotViewer {
         int getResWidth() {return res_width;}
         int getResHeight() {return res_height;}
         int getFramerate() {return framerateLimit;}
-        int getIters() {return max_iter;}
+        int getIters() {return max_iter.load();}
         double getRotation() {return rotation;}
         double getColorMultiple() {return color_multiple;}
         sf::Vector2i getMousePosition();
@@ -46,12 +46,12 @@ class MandelbrotViewer {
         //Setter functions:
         void incIterations();
         void decIterations();
-        void setIterations(int iter) {max_iter = iter; initPalette();}
+        void setIterations(int iter) {temp_max_iter.store(iter); initPalette();}
         void setColorMultiple(double mult) {color_multiple = mult;}
         void setFramerate(int rate) {framerateLimit = rate;}
         void setColorScheme(int newScheme);
         void setRotation(double radians);
-        void restartGeneration() {restart_gen = true;}
+        void restartGeneration() {restart_gen.store(true);}
         void lockColor();
         
         //Functions to change parameters for mandelbrot generation:
@@ -97,7 +97,8 @@ class MandelbrotViewer {
         sf::View *view;
 
         //Parameters to generate the mandelbrot:
-        bool restart_gen; //set to true to stop generation before it's finished
+        //bool restart_gen; //set to true to stop generation before it's finished
+        std::atomic<bool> restart_gen;
 
         //this is the area of the complex plane to generate
         sf::Rect<double> area;
@@ -119,8 +120,10 @@ class MandelbrotViewer {
 
         //maximum number of iterations to check for. Higher values are slower,
         //but more precise
-        unsigned int max_iter;
-        unsigned int last_max_iter;
+        std::atomic<unsigned int> max_iter;
+        std::atomic<unsigned int> last_max_iter;
+        // temp value for holding keys
+        std::atomic<unsigned int> temp_max_iter;
 
 
         //Functions:
@@ -137,7 +140,7 @@ class MandelbrotViewer {
         void genLine();
 
         //this looks up a color to print according to the escape value given
-        sf::Color findColor(int iter);
+        sf::Color findColor(unsigned int iter);
 
         //this function handles rotation - it takes in a complex point with zero rotation
         //and returns where that point is when rotated

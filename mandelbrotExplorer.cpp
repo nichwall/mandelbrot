@@ -46,9 +46,6 @@ int main() {
     param.brot = &brot;
     param.done = true;
 
-    //create an event to test for input
-    sf::Event event;
-
     //main window loop
     while (brot.isOpen()) {
 

@@ -40,7 +40,7 @@ MandelbrotViewer::MandelbrotViewer(int resX, int resY) {
     
     //initialize the color palette
     color_locked = false;
-    std::vector<int> pal_row(max_iter);
+    std::vector<int> pal_row(max_iter.load());
     palette.push_back(pal_row);
     palette.push_back(pal_row);
     palette.push_back(pal_row);
@@ -115,21 +115,19 @@ bool MandelbrotViewer::isOpen() {
 void MandelbrotViewer::incIterations() {
     //if iterations is in the hundreds, add 100
     //if iterations is in the thousands, add 1000, etc.
-    int magnitude = (int) log10(max_iter);
+    int magnitude = (int) log10(temp_max_iter.load());
     unsigned int inc = pow(10, magnitude);
-    max_iter += inc;
-    initPalette();
+    temp_max_iter.fetch_add(inc);
 }
 
 void MandelbrotViewer::decIterations() {
     //if iterations is in the hundreds, subtract 100
     //if iterations is in the thousands, subtract 1000, etc.
-    if (max_iter > 100) {
-        int magnitude = (int) log10(max_iter);
+    if (temp_max_iter.load() > 100) {
+        int magnitude = (int) log10(temp_max_iter.load());
         unsigned int dec = pow(10, magnitude);
-        if (dec == max_iter) dec /= 10;
-        max_iter -= dec;
-        initPalette();
+        if (dec == temp_max_iter.load()) dec /= 10;
+        temp_max_iter.fetch_sub(dec);
     }
 }
 
@@ -251,12 +249,12 @@ void MandelbrotViewer::generate() {
 
         //create and launch the thread pool
         std::vector<std::thread> threadPool;
-        for (int i=0; i<max_threads; i++) {
+        for (unsigned int i=0; i<max_threads; i++) {
             threadPool.push_back(std::thread(&MandelbrotViewer::genLine, this));
         }
 
         //wait for the threads to finish
-        for (int i=0; i<max_threads; i++) {
+        for (unsigned int i=0; i<max_threads; i++) {
             threadPool[i].join();
         }
 
@@ -268,7 +266,7 @@ void MandelbrotViewer::generate() {
     }
 
     //reset last_max_iter to the new max_iter
-    last_max_iter = max_iter;
+    last_max_iter.store(max_iter.load());
 }
 
 //this is a private worker thread function. Each thread picks the next ungenerated
@@ -277,8 +275,6 @@ void MandelbrotViewer::genLine() {
 
     int iter, row, column;
     sf::Vector2<double> point;
-    double x_inc = interpolate(area.width, res_width);
-    double y_inc = interpolate(area.height, res_height);
     sf::Color color;
 
     while(true) {
@@ -314,8 +310,9 @@ void MandelbrotViewer::resetMandelbrot() {
     area.width = area_inc * res_width;
     area.left = -0.5 - area.width/2.0;
 
-    max_iter = 100;
-    last_max_iter = 100;
+    max_iter.store(100);
+    last_max_iter.store(100);
+    temp_max_iter.store(100);
     color_multiple = 1;
     rotation = 0;
     color_locked = false;
@@ -408,7 +405,7 @@ void MandelbrotViewer::enableOverlay(bool enable) {
             ss << "\t\t\t\t\tColor is locked";
         else
             ss << "\t\t\t\t\tColor is unlocked";
-		ss << "\n\nIterations: " << max_iter << std::fixed << std::setprecision(0);
+		ss << "\n\nIterations: " << max_iter.load() << std::fixed << std::setprecision(0);
         ss << "\n\nRotation: " << angle << " degrees";
 
         stats.setFont(font);
@@ -470,14 +467,14 @@ int MandelbrotViewer::escape(int row, int column) {
         if (rotation) point = rotate(point);
 
         double x = 0, y = 0;
-        int iter = 0;
+        unsigned int iter = 0;
 
         double x_square = 0;
         double y_square = 0;
 
         //this is a specialized version of z = z^2 + c. It only does three multiplications,
         //instead of the normal six. Multplications are very costly with such high precision
-        for (; iter < max_iter; iter++) {
+        for (; iter < max_iter.load(); iter++) {
             y = x * y;
             y += y; //multiply by two
             y += point.y;
@@ -490,14 +487,14 @@ int MandelbrotViewer::escape(int row, int column) {
             if (x_square + y_square > 4.0) return iter;
         }
 //    }
-    return max_iter;
+    return max_iter.load();
 }
 
 //findColor uses the number of iterations passed to it to look up a color in the palette
-sf::Color MandelbrotViewer::findColor(int iter) {
+sf::Color MandelbrotViewer::findColor(unsigned int iter) {
     int i = (int) fmod(iter * color_multiple, palette[0].size());
     sf::Color color;
-    if (iter >= max_iter) color = sf::Color::Black;
+    if (iter >= max_iter.load()) color = sf::Color::Black;
     else if (iter == 0) {
         color = sf::Color::White;
     } else {
@@ -551,9 +548,9 @@ void MandelbrotViewer::initPalette() {
     //if the color is locked, it shouldn't resize the palette
     //(that would change the color scale)
     if (!color_locked) {
-        palette[0].resize(max_iter);
-        palette[1].resize(max_iter);
-        palette[2].resize(max_iter);
+        palette[0].resize(max_iter.load());
+        palette[1].resize(max_iter.load());
+        palette[2].resize(max_iter.load());
     }
 
     //define some non-standard colors
@@ -763,7 +760,8 @@ void MandelbrotViewer::quadtree_writeSquare(Square &r_square) {
     int iterCount = image_array[r_square.min_y][r_square.min_x];
     for (unsigned int i=r_square.min_y+1; i<r_square.max_y; i++) {
         for (unsigned int j=r_square.min_x+1; j<r_square.max_x; j++) {
-            image_array[i][j] = iterCount;
+            //image_array[i][j] = iterCount;
+            image_array[i][j] = 0;
         }
     }
 }
@@ -790,6 +788,13 @@ void MandelbrotViewer::quadtree_splitSquare(Square &r_square) {
     vector_put(plusToWrite, mutex_plusToWrite, plus);
 }
 void MandelbrotViewer::quadtree_master() {
+    // Read out what the iteration count should be
+    unsigned int temp = temp_max_iter.load();
+    if (temp != max_iter.load()) {
+        max_iter.store(temp);
+        initPalette();
+    }
+    printf("Starting generate at iteration: %u\n",max_iter.load());
     // Zero all the working variables
     plusToWrite.clear();
     squaresToWrite.clear();
@@ -807,9 +812,10 @@ void MandelbrotViewer::quadtree_master() {
     }
 
     quadtree_done.store(false);
+    restart_gen.store(false);
     Plus plus;
     Square square;
-    while ( !quadtree_done.load() ) {
+    while ( !quadtree_done.load() && !restart_gen.load() ) {
         // Write all the pluses
         mutex_plusToWrite.lock();
         while (plusToWrite.size() != 0) {
@@ -837,21 +843,31 @@ void MandelbrotViewer::quadtree_master() {
             quadtree_writeSquare(square);
         }
         quadtree_done.store(quadtree_masterDone());
+
+        if (restart_gen.load() == true) {
+            printf("Restarted gen!\n");
+            break;
+        }
     }
 
     // Join all the threads in the pool
     for (unsigned int i=0; i<max_threads; i++) {
         threadPool[i].join();
     }
+    // If we ended early, return before we draw half an image
+    if (restart_gen.load() == true) {
+        printf("Returning\n");
+        return;
+    }
     
-    for (unsigned int i=0; i<res_width; i++) {
-        for (unsigned int j=0; j<res_height; j++) {
+    for (int i=0; i<res_width; i++) {
+        for (int j=0; j<res_height; j++) {
             image.setPixel(i, j, findColor(image_array[j][i]));
         }
     }
+    printf("created image\n");
 }
 void MandelbrotViewer::quadtree_slave() {
-    bool failed;
     Square square;
     while (!quadtree_done.load()) {
         mutex_squaresToSplit.lock();
@@ -867,6 +883,12 @@ void MandelbrotViewer::quadtree_slave() {
             mutex_squaresToSplit.lock();
         }
         mutex_squaresToSplit.unlock();
+
+        // Check if we're trying to restart the generation
+        if (restart_gen.load() == true) {
+            printf("Slave died\n");
+            return;
+        }
     }
 }
 // End N Stuff
