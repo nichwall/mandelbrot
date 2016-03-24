@@ -158,8 +158,6 @@ class MandelbrotViewer {
         std::vector< Square > squaresToSplit; // Slaves need to split these and put them into plusToWrite
         std::vector< Plus   > plusToWrite;    // Slaves generate the pluses for Master
 
-        std::mutex mutex_squaresToCheck;
-        std::mutex mutex_squaresToWrite;
         std::mutex mutex_squaresToSplit;
         std::mutex mutex_plusToWrite;
 
