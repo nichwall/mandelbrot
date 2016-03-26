@@ -448,16 +448,16 @@ sf::Vector2<double> MandelbrotViewer::pixelToComplex(sf::Vector2f pix) {
 //it is the brain of the mandelbrot program: it does the work to
 //make the pretty pictures :)
 int MandelbrotViewer::escape(int row, int column) {
-/*
+
     //check if we increased iterations and if the pixel already diverged
-    if (last_max_iter < max_iter && image_array[row][column] < last_max_iter) 
+    if (last_max_iter.load() < max_iter.load() && image_array[row][column] < last_max_iter.load())
         return image_array[row][column];
     //check if we decreased iterations and if the pixel already converged
-    else if (last_max_iter > max_iter && image_array[row][column] > max_iter)
+    else if (last_max_iter.load() > max_iter.load() && image_array[row][column] > max_iter.load())
         return image_array[row][column];
     //if not, use the escape-time algorithm to calculate iter
     else {
-*/
+
         //convert from pixel to complex coordinates
         sf::Vector2f pnt(column, row);
         sf::Vector2<double> point = pixelToComplex(pnt);
@@ -486,7 +486,7 @@ int MandelbrotViewer::escape(int row, int column) {
             //if the magnitude is greater than 2, it will escape
             if (x_square + y_square > 4.0) return iter;
         }
-//    }
+    }
     return max_iter.load();
 }
 
@@ -757,7 +757,7 @@ void MandelbrotViewer::quadtree_checkSquare(Square &r_square) {
         squaresToWrite.push_back(r_square);
 }
 void MandelbrotViewer::quadtree_writeSquare(Square &r_square) {
-    int iterCount = image_array[r_square.min_y][r_square.min_x];
+    //int iterCount = image_array[r_square.min_y][r_square.min_x];
     for (unsigned int i=r_square.min_y+1; i<r_square.max_y; i++) {
         for (unsigned int j=r_square.min_x+1; j<r_square.max_x; j++) {
             //image_array[i][j] = iterCount;
@@ -802,6 +802,7 @@ void MandelbrotViewer::quadtree_master() {
     squaresToSplit.clear();
     numberOfThreads.store(0);
     quadtree_done.store(false);
+
     // Generate the outer edge
     quadtree_createOutsideImage();
 
@@ -857,6 +858,7 @@ void MandelbrotViewer::quadtree_master() {
     // If we ended early, return before we draw half an image
     if (restart_gen.load() == true) {
         printf("Returning\n");
+        last_max_iter.store( max_iter.load() );
         return;
     }
     
@@ -866,6 +868,7 @@ void MandelbrotViewer::quadtree_master() {
         }
     }
     printf("created image\n");
+    last_max_iter.store( max_iter.load() );
 }
 void MandelbrotViewer::quadtree_slave() {
     Square square;
